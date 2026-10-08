@@ -36,3 +36,6 @@ export const ClockIcon = () => (
 export const ExternalIcon = () => (
   <Icon><path d="M6.5 3.5H4A1.5 1.5 0 0 0 2.5 5v7A1.5 1.5 0 0 0 4 13.5h7a1.5 1.5 0 0 0 1.5-1.5V9.5M9 2.5h4.5V7M13.5 2.5l-6 6" /></Icon>
 )
+export const UpdateAvailableIcon = () => (
+  <Icon><circle cx="8" cy="8" r="5.5" /><path d="M8 11V5.5M5.5 8 8 5.5 10.5 8" /></Icon>
+)

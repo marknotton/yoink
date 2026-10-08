@@ -264,25 +264,35 @@ li:last-child > .row { border-bottom: 0; }
 .android .btn--small { padding: 6px 10px; margin: -6px -10px -6px 0; }
 .android .footer__meta .btn:first-child { max-width: 160px; }
 
-/* ── About modal ────────────────────────────────────────────── */
-.modal-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; padding: 16px; }
-.modal { width: 320px; max-width: 100%; box-shadow: var(--shadow); }
-.modal .card-body p { font-size: 12px; user-select: text; -webkit-user-select: text; }
+/* ── About modal ────────────────────────────────────────────
+   Fits any window: it never gets wider than the window (minus a gutter), never
+   taller than it, and scrolls inside itself when there isn't room. margin:auto
+   on the card centres it without clipping the top when it overflows. */
+.modal-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.35); display: flex; padding: 16px; overflow: auto; }
+.modal {
+  margin: auto;
+  width: min(360px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+.modal .card-header { flex-shrink: 0; }
+.modal .card-body { overflow-y: auto; min-height: 0; }
+.modal .card-body p { font-size: 12px; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 .links { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 4px; }
-.links .btn { justify-content: center; }
+.links .btn { justify-content: center; white-space: normal; text-align: center; line-height: 1.3; }
 .modal__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .btn--about { font-size: 11px; color: var(--text-3); padding: 7px 8px; }
 
-/* ── Downloads list ─────────────────────────────────────────── */
-.job { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
-li:last-child.job { border-bottom: 0; }
-.job__main { display: flex; align-items: center; gap: 10px; }
-.job__main > svg { color: var(--text-3); flex-shrink: 0; }
-.job__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.job__actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-.row__sub--success { color: var(--success); display: flex; align-items: center; gap: 4px; }
-.row__sub--error { color: var(--error); white-space: normal; }
-.logo--small { display: block; width: 56px; height: 14px; color: var(--accent); }
+/* ── Update status icon ─────────────────────────────────────── */
+.update-row__status { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 140px; }
+.update-row__status svg { flex-shrink: 0; }
+.update-row__status.ok svg { color: var(--success); }
+.update-row__status.available svg { color: var(--warning); }
+.update-row__status.error svg { color: var(--error); }
+.update-row__status.available .meta { color: var(--text); }
+.card-actions .btn--small:not(:last-child) { margin-right: 0; }
 
 /* ── Update toast ───────────────────────────────────────────── */
 .app { position: relative; }
@@ -301,7 +311,7 @@ li:last-child.job { border-bottom: 0; }
 .toast__actions { display: flex; justify-content: flex-end; gap: 8px; }
 .toast__close { background: transparent; border: 0; color: var(--text-3); padding: 2px 4px; font-size: 12px; }
 .toast__close:hover { color: var(--text); }
-.update-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.update-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .update-row .btn--small { margin: 0; flex-shrink: 0; }
 .android .toast { left: 16px; right: 16px; }
 .android .toast__actions .btn { min-height: 40px; padding: 0 16px; }

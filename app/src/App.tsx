@@ -3,7 +3,7 @@ import * as backend from "./lib/backend"
 import { APP_VERSION, updateActionLabel, useUpdates } from "./lib/updates"
 import { UpdateToast } from "./UpdateToast"
 import { Logo } from "./logo"
-import { ExternalIcon, AlertIcon, CheckIcon, ClockIcon, DownloadIcon, FolderIcon, MusicIcon, PasteIcon, VideoIcon } from "./icons"
+import { ExternalIcon, UpdateAvailableIcon, AlertIcon, CheckIcon, ClockIcon, DownloadIcon, FolderIcon, MusicIcon, PasteIcon, VideoIcon } from "./icons"
 import { formatDuration, formatEta, formatSpeed, formatBytes, tildify } from "./lib/format"
 import { detectPlatform, isProbablyUrl, type Platform } from "./lib/platforms"
 import { buildChoices, type DownloadChoice, type Progress, type VideoInfo } from "./lib/ytdlp"
@@ -15,6 +15,12 @@ const ORIGINAL_PROFILE = "https://github.com/pablostanley"
 const HISTORY_KEY = "yoink.history"
 const OUT_DIR_KEY = "yoink.outDir"
 const HISTORY_LIMIT = 50
+const CACHE_KEY = "yoink.probeCache"
+const CACHE_LIMIT = 20
+// The format list rarely changes, so a day-old fetch is fine to show instantly.
+// The saved download link inside it expires much sooner, so it's only reused for an hour.
+const CACHE_MAX_AGE = 24 * 60 * 60 * 1000
+const INFO_PATH_MAX_AGE = 60 * 60 * 1000
 
 
 // Downloads live outside the phase so any number can run while you paste more links
@@ -75,6 +81,40 @@ function loadHistory(): HistoryEntry[] {
   }
 }
 
+// ── Fetch cache: what yt-dlp told us about a link, kept next to Recent ──
+type CachedProbe = {
+  title: string
+  uploader?: string
+  duration?: number
+  choices: DownloadChoice[]
+  infoPath?: string
+  fetchedAt: number
+}
+
+function loadCache(): Record<string, CachedProbe> {
+  try {
+    const parsed: unknown = JSON.parse(readStore(CACHE_KEY) ?? "{}")
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, CachedProbe>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveCache(url: string, entry: CachedProbe) {
+  const all = { ...loadCache(), [url]: entry }
+  // keep only the newest few so this can't grow forever
+  const newest = Object.entries(all).sort((a, b) => b[1].fetchedAt - a[1].fetchedAt).slice(0, CACHE_LIMIT)
+  writeStore(CACHE_KEY, JSON.stringify(Object.fromEntries(newest)))
+}
+
+function freshCached(url: string): CachedProbe | undefined {
+  const hit = loadCache()[url]
+  const usable = hit && Array.isArray(hit.choices) && hit.choices.length > 0 && Date.now() - hit.fetchedAt < CACHE_MAX_AGE
+  if (!usable) return undefined
+  // older fetches were saved with a "not QuickTime-compatible" note that no longer exists
+  return { ...hit, choices: hit.choices.map((c) => ({ ...c, detail: c.detail.replace(" · not QuickTime-compatible", "") })) }
+}
+
 const shortUrl = (url: string) => url.replace(/^https?:\/\/(www\.)?/, "")
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -91,6 +131,7 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [outDir, setOutDir] = useState(() => (backend.isAndroid ? "" : (readStore(OUT_DIR_KEY) ?? "")))
 
+  const [fromCache, setFromCache] = useState(false)
   const infoPathRef = useRef<string | undefined>(undefined)
   // bumped on every new probe/cancel so a stale yt-dlp result is dropped
   const runRef = useRef(0)
@@ -129,7 +170,9 @@ export default function App() {
     const fit = () => {
       const chrome = 28 + 57 + 16 + 20 // appbar + footer + content padding
       const max = Math.max(300, window.screen.availHeight - 40)
-      const height = Math.min(max, Math.max(300, Math.ceil(inner.offsetHeight) + chrome))
+      // the About dialog is taller than the home screen, so the window makes room for it
+      const wanted = Math.max(300, Math.ceil(inner.offsetHeight) + chrome, aboutOpen ? 560 : 0)
+      const height = Math.min(max, wanted)
       if (Math.abs(height - window.innerHeight) > 1) {
         backend.fitWindowHeight(height)
       }
@@ -138,7 +181,7 @@ export default function App() {
     observer.observe(inner)
     fit()
     return () => observer.disconnect()
-  }, [])
+  }, [aboutOpen])
 
   useEffect(() => {
     if (outDir) return
@@ -160,8 +203,18 @@ export default function App() {
       if (run !== runRef.current) return
       const videoInfo = JSON.parse(result.info) as VideoInfo
       infoPathRef.current = result.infoPath
+      const built = buildChoices(videoInfo)
+      saveCache(target, {
+        title: videoInfo.title,
+        uploader: videoInfo.uploader,
+        duration: videoInfo.duration,
+        choices: built,
+        infoPath: result.infoPath,
+        fetchedAt: Date.now(),
+      })
+      setFromCache(false)
       setInfo(videoInfo)
-      setChoices(buildChoices(videoInfo))
+      setChoices(built)
       setSelected(0)
       setPhase({ name: "picking" })
     } catch (e) {
@@ -175,6 +228,19 @@ export default function App() {
       const trimmed = value.trim()
       if (!isProbablyUrl(trimmed)) {
         setPhase({ name: "input", warning: "That doesn’t look like a link — paste a full URL." })
+        return
+      }
+      // fetched this link recently? skip yt-dlp and go straight to the formats
+      const cached = freshCached(trimmed)
+      if (cached) {
+        setUrl(trimmed)
+        setPlatform(detectPlatform(trimmed))
+        setInfo({ title: cached.title, uploader: cached.uploader, duration: cached.duration })
+        setChoices(cached.choices)
+        setSelected(0)
+        infoPathRef.current = Date.now() - cached.fetchedAt < INFO_PATH_MAX_AGE ? cached.infoPath : undefined
+        setFromCache(true)
+        setPhase({ name: "picking" })
         return
       }
       void startProbe(trimmed)
@@ -300,6 +366,16 @@ export default function App() {
 
   const busy = phase.name === "probing"
   // the big logo belongs to the home screen; every other page gets the small one (Android)
+  // green tick = up to date, orange arrow = update available, red = the check failed
+  const updateTone = updates.checking
+    ? "checking"
+    : updates.error
+      ? "error"
+      : updates.latest
+        ? "available"
+        : updates.checkedOnce
+          ? "ok"
+          : "idle"
   const isHome = phase.name === "input" || phase.name === "probing"
 
   return (
@@ -358,7 +434,14 @@ export default function App() {
             <section className="card">
               <header className="card-header">
                 <h2 className="card-title">Video</h2>
-                {platform && <span className="pill pill--accent">{platform.label}</span>}
+                <span className="card-actions">
+                  {fromCache && (
+                    <button className="btn btn--ghost btn--small" onClick={() => void startProbe(url)} title="This is from your last fetch">
+                      Refresh
+                    </button>
+                  )}
+                  {platform && <span className="pill pill--accent">{platform.label}</span>}
+                </span>
               </header>
               <div className="card-body">
                 <p className="video-title">{info.title}</p>
@@ -506,16 +589,19 @@ export default function App() {
                 <strong>{ORIGINAL_AUTHOR}</strong>. All credit for the idea and the download flow goes to them.
               </p>
               <div className="update-row">
-                <span className="meta">
-                  {updates.error
-                    ? updates.error
-                    : updates.checking
-                      ? "Checking for updates…"
-                      : updates.latest
-                        ? `Version ${updates.latest.version} is available.`
-                        : updates.checkedOnce
-                          ? "You’re up to date."
-                          : `You’re on ${VERSION}.`}
+                <span className={`update-row__status ${updateTone}`}>
+                  {updates.checking ? <span className="spinner" /> : updateTone === "ok" ? <CheckIcon /> : updateTone === "available" ? <UpdateAvailableIcon /> : updateTone === "error" ? <AlertIcon /> : null}
+                  <span className="meta">
+                    {updates.error
+                      ? updates.error
+                      : updates.checking
+                        ? "Checking for updates…"
+                        : updates.latest
+                          ? `Version ${updates.latest.version} is available.`
+                          : updates.checkedOnce
+                            ? "You’re up to date."
+                            : `You’re on ${VERSION}.`}
+                  </span>
                 </span>
                 {updates.latest ? (
                   <button className="btn btn--primary btn--small" onClick={() => void updates.install()} disabled={updates.status === "installing"}>

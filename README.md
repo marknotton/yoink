@@ -22,7 +22,7 @@ terminal.
 - **A sensible format list.** One row per resolution with an estimated size, plus audio-only mp3. If a video
   only comes in one quality, it asks whether you want video with audio, or audio only.
 - **Plays everywhere on Apple devices.** It prefers H.264 and AAC, so files open in QuickTime and Quick Look.
-  Above 1080p, YouTube only offers VP9 and AV1, and those rows are labelled so you know what you're getting.
+  Above 1080p, YouTube only offers VP9 and AV1, which QuickTime can't play. Those download fine and open in VLC.
 - **Several downloads at once.** Start one, go back, paste another. Each has its own progress bar and cancel
   button.
 - **Recent links** with titles, and a Clear button.

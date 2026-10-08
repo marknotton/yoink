@@ -84,7 +84,7 @@ export function buildChoices(info: VideoInfo): DownloadChoice[] {
     choices.push({
       kind: "video",
       label: `${height}p`,
-      detail: h264.length ? `mp4${sizeLabel}` : `mp4 · not QuickTime-compatible${sizeLabel}`,
+      detail: `mp4${sizeLabel}`,
       args: [
         "-f",
         `${video}+ba[ext=m4a]/${video}+ba/b[height=${height}]/bv*[height<=${height}]+ba/b`,
@@ -96,7 +96,7 @@ export function buildChoices(info: VideoInfo): DownloadChoice[] {
 
   // if every resolution claims the same size, the extra rows are just noise
   if (choices.length > 1) {
-    const sizes = new Set(choices.map((c) => c.detail.replace(" · not QuickTime-compatible", "")))
+    const sizes = new Set(choices.map((c) => c.detail))
     if (sizes.size === 1 && choices[0].detail.includes("~")) choices.length = 1
   }
 
