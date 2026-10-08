@@ -85,10 +85,18 @@ step("Preflight")
 const wantsMac = targets.includes("mac")
 const wantsAndroid = targets.includes("android")
 
+let ghUser = ""
 try {
-  read("gh", ["auth", "status"])
+  ghUser = read("gh", ["api", "user", "-q", ".login"])
 } catch {
   fail("The GitHub CLI isn't signed in. Run: gh auth login")
+}
+// Several accounts can be signed in at once, but only the active one publishes.
+// Releasing from the wrong one is easy to do and annoying to undo.
+const owner = REPO.split("/")[0]
+console.log(`  releasing as GitHub user “${ghUser}” to ${REPO}`)
+if (ghUser.toLowerCase() !== owner.toLowerCase()) {
+  fail(`The active GitHub account is “${ghUser}”, but ${REPO} belongs to “${owner}”.\nSwitch with: gh auth switch --user ${owner}`)
 }
 
 // The release commit only adds the version files. Anything else uncommitted
