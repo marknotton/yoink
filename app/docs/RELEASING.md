@@ -91,7 +91,7 @@ It uploads with `--clobber`, replacing the manifest and files on the existing re
 You can also edit `latest.json` by hand in `release-staging/` and upload it:
 
 ```sh
-gh release upload vX.Y.Z release-staging/latest.json --clobber --repo marknotton-yello/Yoink
+gh release upload vX.Y.Z release-staging/latest.json --clobber --repo marknotton/yoink
 ```
 
 ## Testing the whole chain
