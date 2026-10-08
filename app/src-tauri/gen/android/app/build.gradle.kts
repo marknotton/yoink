@@ -60,8 +60,12 @@ android {
             if (keystoreProps.containsKey("storeFile")) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            // R8 off. It scrambles youtubedl-android's reflection-based internals and the app
+            // crashed one second after launch ("class n7 is not a concrete class"). Debug builds
+            // never ran it, which is why those worked. The app is ~58 MB of Python and ffmpeg,
+            // so shrinking the Java code saves almost nothing anyway.
             optimization {
-               enable = true
+               enable = false
             }
             proguardFiles(
                 *fileTree(".") {
