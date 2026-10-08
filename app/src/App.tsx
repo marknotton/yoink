@@ -139,6 +139,7 @@ export default function App() {
 
   const [fromCache, setFromCache] = useState(false)
   const [existing, setExisting] = useState<DownloadedFile[]>([])
+  const [openError, setOpenError] = useState<string | null>(null)
   const infoPathRef = useRef<string | undefined>(undefined)
   // bumped on every new probe/cancel so a stale yt-dlp result is dropped
   const runRef = useRef(0)
@@ -361,6 +362,17 @@ export default function App() {
     setJobs((list) => list.filter((j) => j.id !== id))
   }
 
+  // Open / Show: say so when it fails, instead of silently doing nothing
+  const openSaved = async (path: string, how: "open" | "show" = "open") => {
+    try {
+      await (how === "open" ? backend.openFile(path) : backend.reveal(path))
+      setOpenError(null)
+    } catch (e) {
+      setOpenError(errorText(e))
+      setTimeout(() => setOpenError(null), 6000)
+    }
+  }
+
   const retryJob = (job: Job) => void runJob(job, null)
   const dismissJob = (id: string) => setJobs((list) => list.filter((j) => j.id !== id))
   const clearFinished = () => setJobs((list) => list.filter((j) => j.status === "running"))
@@ -488,9 +500,9 @@ export default function App() {
                         <span className="found__name">{f.label} · {f.path.split("/").pop()}</span>
                       </div>
                       <div className="found__actions">
-                        <button className="btn btn--secondary btn--small" onClick={() => void backend.openFile(f.path)}>Open</button>
+                        <button className="btn btn--secondary btn--small" onClick={() => void openSaved(f.path)}>Open</button>
                         {!backend.isAndroid && (
-                          <button className="btn btn--ghost btn--small" onClick={() => void backend.reveal(f.path)}>Show</button>
+                          <button className="btn btn--ghost btn--small" onClick={() => void openSaved(f.path, "show")}>Show</button>
                         )}
                       </div>
                     </li>
@@ -540,7 +552,7 @@ export default function App() {
             </header>
             <ul className="list">
               {jobs.map((job) => (
-                <JobRow key={job.id} job={job} onCancel={cancelJob} onRetry={retryJob} onDismiss={dismissJob} />
+                <JobRow key={job.id} job={job} onCancel={cancelJob} onRetry={retryJob} onDismiss={dismissJob} onOpen={openSaved} />
               ))}
             </ul>
           </section>
@@ -566,6 +578,7 @@ export default function App() {
                 </li>
               ))}
             </ul>
+            {openError && <p className="note note--error job-error"><AlertIcon /> {openError}</p>}
           </section>
         )}
 
@@ -704,11 +717,13 @@ function JobRow({
   onCancel,
   onRetry,
   onDismiss,
+  onOpen,
 }: {
   job: Job
   onCancel: (id: string) => void
   onRetry: (job: Job) => void
   onDismiss: (id: string) => void
+  onOpen: (path: string, how?: "open" | "show") => void
 }) {
   const percent = job.processing
     ? 1
@@ -731,7 +746,7 @@ function JobRow({
         <div className="job__actions">
           {job.status === "running" && <button className="btn btn--danger-ghost btn--small" onClick={() => onCancel(job.id)}>Cancel</button>}
           {job.status === "done" && (
-            <button className="btn btn--secondary btn--small" onClick={() => void backend.reveal(job.filepath!)}>
+            <button className="btn btn--secondary btn--small" onClick={() => void onOpen(job.filepath!, backend.isAndroid ? "open" : "show")}>
               {backend.isAndroid ? "Open" : "Show"}
             </button>
           )}

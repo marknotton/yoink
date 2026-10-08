@@ -337,3 +337,5 @@ li:last-child.job { border-bottom: 0; }
 .found__title { font-size: 12px; font-weight: 600; color: var(--success); }
 .found__name { font-size: 11px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .found__actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+
+.job-error { padding: 8px 14px 10px; }

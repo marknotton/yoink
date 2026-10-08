@@ -334,21 +334,36 @@ class YoinkPlugin(private val activity: Activity) : Plugin(activity) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             return savedUris[display]?.takeIf { File(it.path ?: "").exists() }
         }
-        val name = display.substringAfterLast('/')
-        val folder = display.substringBeforeLast('/') + "/"
         val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-        activity.contentResolver.query(
-            collection,
-            arrayOf(MediaStore.Downloads._ID),
-            "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH}=?",
-            arrayOf(name, folder),
-            null,
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val uri = ContentUris.withAppendedId(collection, cursor.getLong(0))
-                savedUris[display] = uri
-                return uri
+        // Just downloaded in this session: we already hold the address. Make sure it still resolves.
+        savedUris[display]?.let { uri ->
+            try {
+                activity.contentResolver.query(uri, arrayOf(MediaStore.Downloads._ID), null, null, null)?.use { c ->
+                    if (c.moveToFirst()) return uri
+                }
+            } catch (_: Exception) {
             }
+            savedUris.remove(display)
+        }
+        // Otherwise (the app was restarted) find it again by name. LIKE, because the folder column
+        // is stored with a trailing slash and an exact match on it is fragile.
+        val name = display.substringAfterLast('/')
+        val folder = display.substringBeforeLast('/')
+        try {
+            activity.contentResolver.query(
+                collection,
+                arrayOf(MediaStore.Downloads._ID),
+                "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH} LIKE ?",
+                arrayOf(name, "$folder%"),
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val uri = ContentUris.withAppendedId(collection, cursor.getLong(0))
+                    savedUris[display] = uri
+                    return uri
+                }
+            }
+        } catch (_: Exception) {
         }
         return null
     }
@@ -367,16 +382,21 @@ class YoinkPlugin(private val activity: Activity) : Plugin(activity) {
             invoke.reject("That file isn't available any more.")
             return
         }
-        try {
-            val type = activity.contentResolver.getType(uri) ?: "*/*"
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, type)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Plugin commands run off the main thread; start the viewer from the UI thread
+        activity.runOnUiThread {
+            try {
+                val type = activity.contentResolver.getType(uri) ?: "*/*"
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, type)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                activity.startActivity(intent)
+                invoke.resolve()
+            } catch (e: android.content.ActivityNotFoundException) {
+                invoke.reject("No app on this phone can play that file.")
+            } catch (e: Exception) {
+                invoke.reject("Couldn’t open the file (${e.javaClass.simpleName}).")
             }
-            activity.startActivity(intent)
-            invoke.resolve()
-        } catch (e: Exception) {
-            invoke.reject("No app found to open this file.")
         }
     }
 
