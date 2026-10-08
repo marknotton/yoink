@@ -198,11 +198,11 @@ export default function App() {
 
   const pasteFromClipboard = async () => {
     try {
-      const text = (await navigator.clipboard.readText()).trim()
+      const text = (await backend.readClipboardText()).trim()
       setUrlInput(text)
       if (isProbablyUrl(text)) submit(text)
     } catch {
-      setPhase({ name: "input", warning: "Couldn’t read the clipboard — press ⌘V instead." })
+      setPhase({ name: "input", warning: "Couldn’t read the clipboard — paste into the box instead." })
     }
   }
 
@@ -299,17 +299,18 @@ export default function App() {
   }
 
   const busy = phase.name === "probing"
+  // the big logo belongs to the home screen; every other page gets the small one (Android)
+  const isHome = phase.name === "input" || phase.name === "probing"
 
   return (
     <div className="app">
       <div className="appbar" data-tauri-drag-region>
-        {backend.isAndroid ? <Logo className="logo logo--small" /> : <span className="appbar__title" data-tauri-drag-region>Yoink</span>}
+        {backend.isAndroid ? (isHome ? null : <Logo className="logo logo--small" />) : <span className="appbar__title" data-tauri-drag-region>Yoink</span>}
       </div>
 
       <main className="content">
         <div className="content__inner" ref={innerRef}>
-        {/* Android already shows the small logo in the top bar; one is enough */}
-        {!backend.isAndroid && (phase.name === "input" || phase.name === "probing") && <Logo />}
+        {isHome && <Logo />}
         {(phase.name === "input" || phase.name === "probing") && (
           <>
             <section className="card">

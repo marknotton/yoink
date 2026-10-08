@@ -27,6 +27,7 @@
           "url": "https://*.githubusercontent.com/**"
         }
       ]
-    }
+    },
+    "clipboard-manager:allow-read-text"
   ]
 }

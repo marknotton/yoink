@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event"
 import { LogicalSize } from "@tauri-apps/api/dpi"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { open } from "@tauri-apps/plugin-dialog"
+import { readText } from "@tauri-apps/plugin-clipboard-manager"
 import type { Progress } from "./ytdlp"
 
 export const isAndroid = /Android/i.test(navigator.userAgent)
@@ -63,4 +64,14 @@ export async function chooseFolder(current: string): Promise<string | undefined>
 export function fitWindowHeight(height: number) {
   if (isAndroid) return
   void getCurrentWindow().setSize(new LogicalSize(window.innerWidth, height))
+}
+
+// Read natively first: Android's web view blocks navigator.clipboard.readText(), and on
+// macOS the native read avoids the little "Paste" bubble.
+export async function readClipboardText(): Promise<string> {
+  try {
+    return (await readText()) ?? ""
+  } catch {
+    return navigator.clipboard.readText()
+  }
 }
