@@ -64,7 +64,8 @@ function writeStore(key: string, value: string) {
     // private mode or blocked storage — carry on
   }
 }
-type HistoryEntry = { url: string; title?: string }
+type DownloadedFile = { path: string; label: string }
+type HistoryEntry = { url: string; title?: string; files?: DownloadedFile[] }
 
 // older versions stored bare URL strings
 function loadHistory(): HistoryEntry[] {
@@ -73,7 +74,12 @@ function loadHistory(): HistoryEntry[] {
     if (!Array.isArray(parsed)) return []
     return parsed.flatMap((e): HistoryEntry[] => {
       if (typeof e === "string") return [{ url: e }]
-      if (e && typeof e.url === "string") return [{ url: e.url, title: typeof e.title === "string" ? e.title : undefined }]
+      if (e && typeof e.url === "string") {
+        const files = Array.isArray(e.files)
+          ? e.files.filter((f: unknown): f is DownloadedFile => !!f && typeof (f as DownloadedFile).path === "string" && typeof (f as DownloadedFile).label === "string")
+          : undefined
+        return [{ url: e.url, title: typeof e.title === "string" ? e.title : undefined, files }]
+      }
       return []
     })
   } catch {
@@ -132,6 +138,7 @@ export default function App() {
   const [outDir, setOutDir] = useState(() => (backend.isAndroid ? "" : (readStore(OUT_DIR_KEY) ?? "")))
 
   const [fromCache, setFromCache] = useState(false)
+  const [existing, setExisting] = useState<DownloadedFile[]>([])
   const infoPathRef = useRef<string | undefined>(undefined)
   // bumped on every new probe/cancel so a stale yt-dlp result is dropped
   const runRef = useRef(0)
@@ -191,6 +198,22 @@ export default function App() {
   useEffect(() => {
     if (phase.name === "input") inputRef.current?.focus()
   }, [phase.name])
+
+  // On the format page: is a file from an earlier download of this link still there?
+  useEffect(() => {
+    if (phase.name !== "picking") {
+      setExisting([])
+      return
+    }
+    let stale = false
+    const files = history.find((h) => h.url === url)?.files ?? []
+    void Promise.all(files.map(async (f) => ((await backend.fileExists(f.path)) ? f : null))).then((found) => {
+      if (!stale) setExisting(found.filter((f): f is DownloadedFile => f !== null))
+    })
+    return () => {
+      stale = true
+    }
+  }, [phase.name, url, history])
 
   // ── Probe ──────────────────────────────────────────────────────
   const startProbe = useCallback(async (target: string) => {
@@ -297,7 +320,10 @@ export default function App() {
       }
       patchJob(job.id, { status: "done", filepath, progress: undefined, processing: false })
       setHistory((prev) => {
-        const next = [{ url: job.url, title: job.title }, ...prev.filter((h) => h.url !== job.url)].slice(0, HISTORY_LIMIT)
+        // remember what was saved, so re-opening the link can offer the file again
+        const before = prev.find((h) => h.url === job.url)?.files ?? []
+        const files = [{ path: filepath, label: job.label }, ...before.filter((f) => f.path !== filepath)].slice(0, 4)
+        const next = [{ url: job.url, title: job.title, files }, ...prev.filter((h) => h.url !== job.url)].slice(0, HISTORY_LIMIT)
         writeStore(HISTORY_KEY, JSON.stringify(next))
         return next
       })
@@ -450,6 +476,28 @@ export default function App() {
                 </p>
               </div>
             </section>
+
+            {existing.length > 0 && (
+              <section className="card card--success">
+                <ul className="list">
+                  {existing.map((f) => (
+                    <li key={f.path} className="found">
+                      <CheckIcon />
+                      <div className="found__text">
+                        <span className="found__title">File still exists. Open now?</span>
+                        <span className="found__name">{f.label} · {f.path.split("/").pop()}</span>
+                      </div>
+                      <div className="found__actions">
+                        <button className="btn btn--secondary btn--small" onClick={() => void backend.openFile(f.path)}>Open</button>
+                        {!backend.isAndroid && (
+                          <button className="btn btn--ghost btn--small" onClick={() => void backend.reveal(f.path)}>Show</button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <section className="card">
               <header className="card-header">

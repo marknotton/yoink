@@ -91,3 +91,20 @@ pub async fn open_downloads(h: State<'_, YoinkHandle>) -> Result<(), String> {
 pub fn platform_key() -> String {
     "android-arm64".into()
 }
+
+#[derive(Deserialize)]
+struct Exists {
+    exists: bool,
+}
+
+#[tauri::command]
+pub async fn file_exists(h: State<'_, YoinkHandle>, path: String) -> Result<bool, String> {
+    let r: Exists = h.0.run_mobile_plugin_async("fileExists", json!({ "path": path })).await.map_err(msg)?;
+    Ok(r.exists)
+}
+
+// "open" on Android is the same as "reveal": hand the file to whatever app plays it
+#[tauri::command]
+pub async fn open_file(h: State<'_, YoinkHandle>, path: String) -> Result<(), String> {
+    reveal(h, path).await
+}

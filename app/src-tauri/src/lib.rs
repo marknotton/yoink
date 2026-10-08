@@ -34,7 +34,9 @@ pub fn run() {
             desktop::reveal,
             desktop::default_out_dir,
             desktop::open_url,
-            desktop::platform_key
+            desktop::platform_key,
+            desktop::file_exists,
+            desktop::open_file
         ]);
 
     #[cfg(target_os = "android")]
@@ -47,7 +49,9 @@ pub fn run() {
         android::default_out_dir,
         android::open_url,
         android::open_downloads,
-        android::platform_key
+        android::platform_key,
+        android::file_exists,
+        android::open_file
     ]);
 
     builder.run(tauri::generate_context!()).expect("error while running Yoink");

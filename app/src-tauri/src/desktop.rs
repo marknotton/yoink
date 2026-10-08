@@ -280,6 +280,21 @@ pub fn open_url(url: String) {
     }
 }
 
+// whether a file we saved earlier is still there
+#[tauri::command]
+pub fn file_exists(path: String) -> bool {
+    Path::new(&path).is_file()
+}
+
+// open a saved file in its default app. Only media types, so this can't launch an app or script.
+#[tauri::command]
+pub fn open_file(path: String) {
+    let ext = Path::new(&path).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    if Path::new(&path).is_file() && ["mp4", "mp3", "m4a", "webm", "mkv", "mov"].contains(&ext.as_str()) {
+        let _ = Command::new("open").arg(path).spawn();
+    }
+}
+
 // the manifest key for this machine, e.g. "darwin-aarch64"
 #[tauri::command]
 pub fn platform_key() -> String {

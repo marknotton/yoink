@@ -316,3 +316,24 @@ li:last-child > .row { border-bottom: 0; }
 .android .toast { left: 16px; right: 16px; }
 .android .toast__actions .btn { min-height: 40px; padding: 0 16px; }
 .android .toast__close { min-width: 40px; min-height: 40px; }
+
+/* ── Downloads list (restored) ─────────────────────────────── */
+.job { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+li:last-child.job { border-bottom: 0; }
+.job__main { display: flex; align-items: center; gap: 10px; }
+.job__main > svg { color: var(--text-3); flex-shrink: 0; }
+.job__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.job__actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.row__sub--success { color: var(--success); display: flex; align-items: center; gap: 4px; }
+.row__sub--error { color: var(--error); white-space: normal; }
+.logo--small { display: block; width: 56px; height: 14px; color: var(--accent); }
+
+/* ── "File still exists" notice on the format page ──────────── */
+.card--success { background: var(--success-soft); border-color: var(--success-border); }
+.found { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.found + .found { border-top: 1px solid var(--success-border); }
+.found > svg { color: var(--success); flex-shrink: 0; }
+.found__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.found__title { font-size: 12px; font-weight: 600; color: var(--success); }
+.found__name { font-size: 11px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.found__actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }

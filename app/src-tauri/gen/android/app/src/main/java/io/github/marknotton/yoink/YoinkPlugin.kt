@@ -8,6 +8,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.pm.PackageManager
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
@@ -328,10 +329,40 @@ class YoinkPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+    // A saved file is found again by name, so this works after the app has been closed
+    private fun uriFor(display: String): Uri? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return savedUris[display]?.takeIf { File(it.path ?: "").exists() }
+        }
+        val name = display.substringAfterLast('/')
+        val folder = display.substringBeforeLast('/') + "/"
+        val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        activity.contentResolver.query(
+            collection,
+            arrayOf(MediaStore.Downloads._ID),
+            "${MediaStore.Downloads.DISPLAY_NAME}=? AND ${MediaStore.Downloads.RELATIVE_PATH}=?",
+            arrayOf(name, folder),
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val uri = ContentUris.withAppendedId(collection, cursor.getLong(0))
+                savedUris[display] = uri
+                return uri
+            }
+        }
+        return null
+    }
+
+    @Command
+    fun fileExists(invoke: Invoke) {
+        val args = invoke.parseArgs(RevealArgs::class.java)
+        invoke.resolve(JSObject().put("exists", uriFor(args.path) != null))
+    }
+
     @Command
     fun reveal(invoke: Invoke) {
         val args = invoke.parseArgs(RevealArgs::class.java)
-        val uri = savedUris[args.path]
+        val uri = uriFor(args.path)
         if (uri == null) {
             invoke.reject("That file isn't available any more.")
             return

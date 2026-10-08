@@ -16,6 +16,8 @@ export const probe = (url: string) => invoke<ProbeResult>("probe", { url })
 export const cancelDownload = (jobId: string) => invoke("cancel_download", { jobId })
 export const openDownloads = () => invoke("open_downloads")
 export const reveal = (path: string) => invoke("reveal", { path })
+export const fileExists = (path: string) => invoke<boolean>("file_exists", { path }).catch(() => false)
+export const openFile = (path: string) => invoke("open_file", { path })
 export const openUrl = (url: string) => invoke("open_url", { url })
 export const defaultOutDir = () => invoke<string>("default_out_dir")
 
