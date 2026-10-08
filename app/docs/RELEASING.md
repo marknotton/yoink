@@ -5,6 +5,9 @@ Every release carries a `latest.json` manifest; every installed copy reads it to
 
 The repo must stay **public**. An installed app has no GitHub token, so it can't read assets from a private repo.
 
+> **Tags are `app-vX.Y.Z`, not `vX.Y.Z`.** This repo is a fork, so Pablo's original tags (`v0.1.1`, `v0.2.0`, `v0.3.x`) come
+> with it. A plain `vX.Y.Z` would collide with them as soon as our version numbers caught up.
+
 ## One-time setup
 
 You need two secrets. Make them once, and **back both up now** (password manager, encrypted drive, anywhere that isn't this laptop alone).
@@ -91,7 +94,7 @@ It uploads with `--clobber`, replacing the manifest and files on the existing re
 You can also edit `latest.json` by hand in `release-staging/` and upload it:
 
 ```sh
-gh release upload vX.Y.Z release-staging/latest.json --clobber --repo marknotton/yoink
+gh release upload app-vX.Y.Z release-staging/latest.json --clobber --repo marknotton/yoink
 ```
 
 ## Testing the whole chain

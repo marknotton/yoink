@@ -68,7 +68,9 @@ function nextVersion(current) {
   return `${maj}.${min}.${pat}`
 }
 const version = nextVersion(pkg.version)
-const tag = `v${version}`
+// Prefixed because this repo is a fork: Pablo's original tags (v0.1.1, v0.2.0, v0.3.x…)
+// come along with it, and a plain vX.Y.Z would collide with them.
+const tag = `app-v${version}`
 
 // ── Platform keys ────────────────────────────────────────────────
 const hostTriple = read("rustc", ["-vV"]).match(/^host: (.+)$/m)?.[1] ?? ""
@@ -325,7 +327,7 @@ if (releaseExists) {
   mutate("gh", ["release", "upload", tag, "--repo", REPO, "--clobber", ...staged])
   mutate("gh", ["release", "upload", tag, "--repo", REPO, "--clobber", manifestPath])
 } else {
-  mutate("gh", ["release", "create", tag, "--repo", REPO, "--draft", "--target", sha, "--title", tag, "--notes", notes])
+  mutate("gh", ["release", "create", tag, "--repo", REPO, "--draft", "--target", sha, "--title", `Yoink v${version}`, "--notes", notes])
   mutate("gh", ["release", "upload", tag, "--repo", REPO, ...staged])
   mutate("gh", ["release", "upload", tag, "--repo", REPO, manifestPath])
 }
