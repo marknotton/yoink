@@ -308,7 +308,8 @@ export default function App() {
 
       <main className="content">
         <div className="content__inner" ref={innerRef}>
-        {(phase.name === "input" || phase.name === "probing") && <Logo />}
+        {/* Android already shows the small logo in the top bar; one is enough */}
+        {!backend.isAndroid && (phase.name === "input" || phase.name === "probing") && <Logo />}
         {(phase.name === "input" || phase.name === "probing") && (
           <>
             <section className="card">
