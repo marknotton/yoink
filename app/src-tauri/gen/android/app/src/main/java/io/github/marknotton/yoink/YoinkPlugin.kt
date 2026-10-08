@@ -1,4 +1,4 @@
-package studio.yello.yoink
+package io.github.marknotton.yoink
 
 import android.Manifest
 import android.app.Activity

@@ -24,10 +24,10 @@ val keystoreProps = Properties().apply {
 
 android {
     compileSdk = 37
-    namespace = "studio.yello.yoink"
+    namespace = "io.github.marknotton.yoink"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "studio.yello.yoink"
+        applicationId = "io.github.marknotton.yoink"
         minSdk = 24
         targetSdk = 37
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()

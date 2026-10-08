@@ -11,7 +11,7 @@ pub struct YoinkHandle(PluginHandle<Wry>);
 pub fn init() -> TauriPlugin<Wry> {
     Builder::<Wry>::new("yoink")
         .setup(|app, api| {
-            let handle = api.register_android_plugin("studio.yello.yoink", "YoinkPlugin")?;
+            let handle = api.register_android_plugin("io.github.marknotton.yoink", "YoinkPlugin")?;
             app.manage(YoinkHandle(handle));
             Ok(())
         })
