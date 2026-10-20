@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import * as backend from "./lib/backend"
 import { APP_VERSION, updateActionLabel, useUpdates } from "./lib/updates"
 import { UpdateToast } from "./UpdateToast"
 import { Logo } from "./logo"
 import { ExternalIcon, UpdateAvailableIcon, AlertIcon, CheckIcon, ClockIcon, DownloadIcon, FolderIcon, MusicIcon, PasteIcon, VideoIcon } from "./icons"
 import { formatDuration, formatEta, formatSpeed, formatBytes, tildify } from "./lib/format"
+import { extractUrls, pickChoice, runPool, type BatchQuality } from "./lib/batch"
 import { detectPlatform, isProbablyUrl, type Platform } from "./lib/platforms"
 import { buildChoices, type DownloadChoice, type Progress, type VideoInfo } from "./lib/ytdlp"
 
@@ -38,13 +39,19 @@ type Job = {
   kind: "video" | "audio"
   choiceArgs: string[]
   infoPath: string | null
-  status: "running" | "done" | "error"
+  // queued / fetching only happen in a batch, before the download itself starts
+  status: "queued" | "fetching" | "running" | "done" | "error"
+  batch?: BatchQuality
   progress?: Progress
   processing: boolean
   refreshing: boolean
   filepath?: string
   message?: string
 }
+
+const isActive = (job: Job) => job.status === "queued" || job.status === "fetching" || job.status === "running"
+// how many batch links are looked up and downloaded at once
+const BATCH_CONCURRENCY = 3
 
 let jobCounter = 0
 const newJobId = () => `job-${Date.now().toString(36)}-${++jobCounter}`
@@ -140,6 +147,10 @@ export default function App() {
   const [fromCache, setFromCache] = useState(false)
   const [existing, setExisting] = useState<DownloadedFile[]>([])
   const [openError, setOpenError] = useState<string | null>(null)
+  const [batchOpen, setBatchOpen] = useState(false)
+  const [batchText, setBatchText] = useState("")
+  const [batchQuality, setBatchQuality] = useState<BatchQuality>("best")
+  const batch = useMemo(() => extractUrls(batchText), [batchText])
   const infoPathRef = useRef<string | undefined>(undefined)
   // bumped on every new probe/cancel so a stale yt-dlp result is dropped
   const runRef = useRef(0)
@@ -276,7 +287,14 @@ export default function App() {
   useEffect(() => {
     if (phase.name !== "input") return
     const onPaste = (e: ClipboardEvent) => {
+      if (batchOpen) return // the batch box takes pasted text as it is
       const text = e.clipboardData?.getData("text")?.trim() ?? ""
+      // more than one link: that's a batch
+      if (extractUrls(text).urls.length > 1) {
+        e.preventDefault()
+        openBatch(text)
+        return
+      }
       if (!isProbablyUrl(text)) return
       e.preventDefault()
       setUrlInput(text)
@@ -284,11 +302,15 @@ export default function App() {
     }
     window.addEventListener("paste", onPaste)
     return () => window.removeEventListener("paste", onPaste)
-  }, [phase.name, submit])
+  }, [phase.name, submit, batchOpen])
 
   const pasteFromClipboard = async () => {
     try {
       const text = (await backend.readClipboardText()).trim()
+      if (extractUrls(text).urls.length > 1) {
+        openBatch(text)
+        return
+      }
       setUrlInput(text)
       if (isProbablyUrl(text)) submit(text)
     } catch {
@@ -373,9 +395,83 @@ export default function App() {
     }
   }
 
-  const retryJob = (job: Job) => void runJob(job, null)
+  const retryJob = (job: Job) =>
+    job.batch && job.choiceArgs.length === 0 ? void processBatchJob(job, job.batch) : void runJob(job, null)
   const dismissJob = (id: string) => setJobs((list) => list.filter((j) => j.id !== id))
-  const clearFinished = () => setJobs((list) => list.filter((j) => j.status === "running"))
+  const clearFinished = () => setJobs((list) => list.filter(isActive))
+
+  // ── Batch ──────────────────────────────────────────────────────
+  const openBatch = (text = "") => {
+    setBatchText(text)
+    setBatchOpen(true)
+    setPhase({ name: "input" })
+  }
+  const closeBatch = () => {
+    setBatchOpen(false)
+    setBatchText("")
+  }
+
+  // One link, start to finish: look it up, take the best format, download it.
+  const processBatchJob = async (job: Job, quality: BatchQuality) => {
+    if (cancelledRef.current.has(job.id)) return
+    patchJob(job.id, { status: "fetching", message: undefined })
+    try {
+      let title = job.title
+      let choicesFound: DownloadChoice[]
+      let infoPath: string | undefined
+      const cached = freshCached(job.url) // fetched it recently? no need to ask again
+      if (cached) {
+        title = cached.title
+        choicesFound = cached.choices
+        infoPath = Date.now() - cached.fetchedAt < INFO_PATH_MAX_AGE ? cached.infoPath : undefined
+      } else {
+        const result = await backend.probe(job.url)
+        const videoInfo = JSON.parse(result.info) as VideoInfo
+        title = videoInfo.title
+        choicesFound = buildChoices(videoInfo)
+        infoPath = result.infoPath
+        saveCache(job.url, { title, uploader: videoInfo.uploader, duration: videoInfo.duration, choices: choicesFound, infoPath, fetchedAt: Date.now() })
+      }
+      if (cancelledRef.current.has(job.id)) return
+      const choice = pickChoice(choicesFound, quality)
+      if (!choice) throw new Error("No downloadable formats were found for this link.")
+      const ready: Job = {
+        ...job,
+        title,
+        label: choice.kind === "audio" ? "Audio · mp3" : choice.label,
+        kind: choice.kind,
+        choiceArgs: choice.args,
+        infoPath: infoPath ?? null,
+      }
+      patchJob(job.id, { title: ready.title, label: ready.label, kind: ready.kind, choiceArgs: ready.choiceArgs, infoPath: ready.infoPath })
+      await runJob(ready, ready.infoPath)
+    } catch (e) {
+      if (cancelledRef.current.has(job.id)) return
+      patchJob(job.id, { status: "error", message: errorText(e), progress: undefined, processing: false })
+    }
+  }
+
+  const startBatch = () => {
+    const taken = new Set(jobs.filter(isActive).map((j) => j.url)) // already on its way
+    const fresh = batch.urls.filter((u) => !taken.has(u))
+    if (fresh.length === 0) return
+    const queued: Job[] = fresh.map((u) => ({
+      id: newJobId(),
+      url: u,
+      title: shortUrl(u),
+      label: "Queued",
+      kind: batchQuality === "audio" ? "audio" : "video",
+      choiceArgs: [],
+      infoPath: null,
+      status: "queued",
+      batch: batchQuality,
+      processing: false,
+      refreshing: false,
+    }))
+    setJobs((list) => [...queued, ...list])
+    closeBatch()
+    void runPool(queued, BATCH_CONCURRENCY, (job) => processBatchJob(job, batchQuality))
+  }
 
   // ── Navigation ─────────────────────────────────────────────────
   const reset = (keepUrl = false) => {
@@ -384,6 +480,7 @@ export default function App() {
     setChoices([])
     setPlatform(undefined)
     if (!keepUrl) setUrlInput("")
+    setBatchOpen(false)
     setPhase({ name: "input" })
   }
 
@@ -425,7 +522,41 @@ export default function App() {
       <main className="content">
         <div className="content__inner" ref={innerRef}>
         {isHome && <Logo />}
-        {(phase.name === "input" || phase.name === "probing") && (
+        {phase.name === "input" && batchOpen && (
+          <section className="card">
+            <header className="card-header">
+              <h2 className="card-title">Batch download</h2>
+              <button className="btn btn--ghost btn--small" onClick={closeBatch}>Single link</button>
+            </header>
+            <div className="card-body">
+              <textarea
+                className="textarea"
+                rows={6}
+                autoFocus
+                spellCheck={false}
+                placeholder={"Paste your links here, one per line.\nAny text with links in it works."}
+                value={batchText}
+                onChange={(e) => setBatchText(e.target.value)}
+              />
+              <p className={`note ${batch.urls.length === 0 && batchText.trim() ? "note--error" : ""}`}>
+                {batch.urls.length === 0
+                  ? batchText.trim() ? "No links found in that text." : "Links are found, tidied and de-duplicated for you."
+                  : `${batch.urls.length} ${batch.urls.length === 1 ? "link" : "links"} found${batch.duplicates ? ` · ${batch.duplicates} duplicate${batch.duplicates === 1 ? "" : "s"} ignored` : ""}${batch.truncated ? ` · only the first ${batch.urls.length} will be used` : ""}`}
+              </p>
+              <div className="seg" role="radiogroup" aria-label="Quality">
+                <button role="radio" aria-checked={batchQuality === "best"} className={`pill pill--choice${batchQuality === "best" ? " pill--accent" : ""}`} onClick={() => setBatchQuality("best")}>Best quality</button>
+                <button role="radio" aria-checked={batchQuality === "audio"} className={`pill pill--choice${batchQuality === "audio" ? " pill--accent" : ""}`} onClick={() => setBatchQuality("audio")}>Audio only · mp3</button>
+              </div>
+              <p className="note">
+                {batchQuality === "best"
+                  ? "Takes the highest resolution available for each link. 4K videos can be several GB each."
+                  : "Saves the audio from each link as an mp3."}
+              </p>
+            </div>
+          </section>
+        )}
+
+        {((phase.name === "input" && !batchOpen) || phase.name === "probing") && (
           <>
             <section className="card">
               <header className="card-header">
@@ -460,7 +591,12 @@ export default function App() {
                   <p className="note"><span className="spinner" /> {phase.status}</p>
                 )}
                 {phase.name === "input" && !phase.warning && (
-                  <p className="note">YouTube, X, Instagram, Threads, TikTok and 1,800+ other sites.</p>
+                  <>
+                    <p className="note">YouTube, X, Instagram, Threads, TikTok and 1,800+ other sites.</p>
+                    <p className="note">
+                      <button className="link-btn" onClick={() => openBatch(urlInput)}>Have a list? Download several at once.</button>
+                    </p>
+                  </>
                 )}
               </div>
             </section>
@@ -545,7 +681,7 @@ export default function App() {
                 {backend.isAndroid && jobs.some((j) => j.status === "done") && (
                   <button className="btn btn--ghost btn--small" onClick={() => void backend.openDownloads()}>Open folder</button>
                 )}
-                {jobs.some((j) => j.status !== "running") && (
+                {jobs.some((j) => !isActive(j)) && (
                   <button className="btn btn--ghost btn--small" onClick={clearFinished}>Clear finished</button>
                 )}
               </span>
@@ -558,7 +694,7 @@ export default function App() {
           </section>
         )}
 
-        {phase.name === "input" && history.length > 0 && (
+        {phase.name === "input" && !batchOpen && history.length > 0 && (
           <section className="card">
             <header className="card-header">
               <h2 className="card-title">Recent</h2>
@@ -612,10 +748,18 @@ export default function App() {
           <button className="btn btn--ghost btn--about" onClick={() => setAboutOpen(true)}>About · {VERSION}</button>
         </div>
         <div className="footer__actions">
-          {phase.name === "input" && (
+          {phase.name === "input" && !batchOpen && (
             <button className="btn btn--primary" onClick={() => submit(urlInput)} disabled={!urlInput.trim()}>
               Fetch formats
             </button>
+          )}
+          {phase.name === "input" && batchOpen && (
+            <>
+              <button className="btn btn--ghost" onClick={closeBatch}>Back</button>
+              <button className="btn btn--primary" onClick={startBatch} disabled={batch.urls.length === 0}>
+                <DownloadIcon /> Download {batch.urls.length > 0 ? `${batch.urls.length} ` : ""}{batch.urls.length === 1 ? "link" : "links"}
+              </button>
+            </>
           )}
           {busy && (
             <button className="btn btn--danger-ghost" onClick={cancel}>Cancel</button>
@@ -737,6 +881,8 @@ function JobRow({
         {job.kind === "audio" ? <MusicIcon /> : <VideoIcon />}
         <div className="job__text">
           <span className="row__name">{job.title}</span>
+          {job.status === "queued" && <span className="row__sub">Waiting for a free slot…</span>}
+          {job.status === "fetching" && <span className="row__sub"><span className="spinner" /> Looking up the best format…</span>}
           {job.status === "running" && <span className="row__sub">{job.label} · {progressText(job)}</span>}
           {job.status === "done" && (
             <span className="row__sub row__sub--success"><CheckIcon /> Saved to {tildify(job.filepath!.replace(/\/[^/]+$/, ""))}</span>
@@ -744,14 +890,14 @@ function JobRow({
           {job.status === "error" && <span className="row__sub row__sub--error">{job.message}</span>}
         </div>
         <div className="job__actions">
-          {job.status === "running" && <button className="btn btn--danger-ghost btn--small" onClick={() => onCancel(job.id)}>Cancel</button>}
+          {isActive(job) && <button className="btn btn--danger-ghost btn--small" onClick={() => onCancel(job.id)}>Cancel</button>}
           {job.status === "done" && (
             <button className="btn btn--secondary btn--small" onClick={() => void onOpen(job.filepath!, backend.isAndroid ? "open" : "show")}>
               {backend.isAndroid ? "Open" : "Show"}
             </button>
           )}
           {job.status === "error" && <button className="btn btn--secondary btn--small" onClick={() => onRetry(job)}>Retry</button>}
-          {job.status !== "running" && (
+          {!isActive(job) && (
             <button className="btn btn--ghost btn--small" onClick={() => onDismiss(job.id)} aria-label="Dismiss">✕</button>
           )}
         </div>

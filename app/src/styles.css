@@ -339,3 +339,31 @@ li:last-child.job { border-bottom: 0; }
 .found__actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 
 .job-error { padding: 8px 14px 10px; }
+
+/* ── Batch download ─────────────────────────────────────────── */
+.textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  min-height: 96px;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+.textarea::placeholder { color: var(--text-3); }
+.textarea:focus-visible { outline-offset: 0; border-color: var(--accent); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill--choice { cursor: default; background: var(--bg); transition: background 0.12s, border-color 0.12s, color 0.12s; }
+.pill--choice:hover { background: var(--surface-2); }
+.pill--choice.pill--accent:hover { background: var(--accent-soft); }
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.link-btn:hover { color: var(--accent-hover); }
+.android .textarea { font-size: 16px; }
+.android .pill--choice { padding: 10px 14px; font-size: 12px; }

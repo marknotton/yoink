@@ -19,6 +19,9 @@ terminal.
 ## Features
 
 - **Paste and go.** Paste a link anywhere on the first screen and it fetches straight away.
+- **Batch downloads.** Paste a whole list (or any text with links in it) and Yoink finds every link, tidies
+  them, drops duplicates, looks each one up and downloads the best quality available, three at a time. One bad
+  link doesn't stop the rest. There's an audio-only (mp3) option too.
 - **A sensible format list.** One row per resolution with an estimated size, plus audio-only mp3. If a video
   only comes in one quality, it asks whether you want video with audio, or audio only.
 - **Plays everywhere on Apple devices.** It prefers H.264 and AAC, so files open in QuickTime and Quick Look.
