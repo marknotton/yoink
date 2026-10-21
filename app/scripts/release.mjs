@@ -216,7 +216,20 @@ else {
   if (wantsMac) {
     step("Building macOS")
     mutate("bash", ["scripts/setup.sh"]) // fetch the bundled yt-dlp and ffmpeg if they aren't there yet
-    mutate(TAURI, ["build"], { env: buildEnv })
+    // The .dmg step drives Finder through AppleScript and fails now and then for no good reason.
+    // A failure leaves its disk image mounted, which makes every later attempt fail as well. So
+    // clear that and try again rather than abandoning a release halfway through.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        mutate(TAURI, ["build"], { env: buildEnv })
+        break
+      } catch (error) {
+        if (attempt >= 3) throw error
+        console.warn(`\n  ⚠ The macOS build failed (attempt ${attempt} of 3). Clearing any stuck disk image and trying again…`)
+        detachStaleImages()
+        await new Promise((resolve) => setTimeout(resolve, 4000))
+      }
+    }
   }
   if (wantsAndroid) {
     step("Building Android (arm64)")
