@@ -107,5 +107,7 @@ test("the cookies-file authenticator imports, finds, and forgets a site's login"
   await auth.signOut(reddit)
   assert.equal(await auth.has(reddit), false)
   assert.equal(await auth.has(x), true, "other sites are untouched")
-  await assert.rejects(auth.signIn(reddit), /export its cookies/)
+  await assert.rejects(auth.signIn(reddit), /export its cookies/, "no login imported, so there's nothing to sign in with")
+  await auth.importCookies(".reddit.com\tTRUE\t/\tTRUE\t0\treddit_session\tagain\n")
+  await auth.signIn(reddit) // resolves now: that's how a server tells the engine a login exists
 })

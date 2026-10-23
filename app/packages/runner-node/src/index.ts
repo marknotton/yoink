@@ -135,7 +135,7 @@ const matches = (domain: string, targets: string[]) => targets.some((t) => domai
 export interface CookiesFileAuthenticator extends Authenticator {
   /** Add cookies from a cookies.txt (as exported by a browser extension), replacing the same domains. */
   importCookies(text: string): Promise<{ added: number; domains: string[] }>
-  /** Is there a saved login for this site? */
+  /** Is there a saved login for this site? `signIn(site)` resolves exactly when this is true. */
   has(site: SignInSite): Promise<boolean>
 }
 
@@ -152,8 +152,13 @@ export function cookiesFileAuthenticator(file: string): CookiesFileAuthenticator
     await fs.writeFile(file, `${HEADER}\n${lines.join("\n")}\n`, { mode: 0o600 }) // a login: private to this user
   }
 
+  const has = async (site: SignInSite) => (await read()).some((l) => matches(domainOf(l), site.domains))
+
   return {
+    // A server can't show a login page. This succeeds once a login for the site has been imported, so the
+    // flow is: importCookies(text), then yoink.signIn(site), which records it and retries waiting jobs.
     async signIn(site) {
+      if (await has(site)) return
       throw new Error(
         `Yoink can't open a login page on a server. Log in to ${site.label} in a browser, export its cookies as a cookies.txt ` +
           `(a browser extension can do this), and pass the text to importCookies().`,
@@ -168,8 +173,6 @@ export function cookiesFileAuthenticator(file: string): CookiesFileAuthenticator
       await write([...(await read()).filter((l) => !matches(domainOf(l), domains)), ...incoming])
       return { added: incoming.length, domains }
     },
-    async has(site) {
-      return (await read()).some((l) => matches(domainOf(l), site.domains))
-    },
+    has,
   }
 }

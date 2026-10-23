@@ -25,11 +25,12 @@ export const isYoinkError = (e: unknown): e is YoinkError => e instanceof YoinkE
 // The "[extractor]" tag and the video id are noise to a person, so they're dropped. The id is only
 // dropped when a tag precedes it, so messages like "Unsupported URL: …" are left alone.
 export function cleanError(stderr: string): string {
-  const last = stderr
+  // (indexing, not .at(-1): that needs Safari 15.4, and this runs inside WebViews)
+  const errors = stderr
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l.startsWith("ERROR:"))
-    .at(-1)
+  const last = errors[errors.length - 1]
   if (!last) return ""
   const body = last.replace(/^ERROR:\s*/, "")
   const tagged = /^\[[^\]]+\]\s*(?:[\w-]+:\s*)?(.*)$/.exec(body)

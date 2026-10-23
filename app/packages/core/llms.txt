@@ -1,0 +1,30 @@
+# @marknotton/yoink-core
+
+> A headless, UI-free TypeScript engine for downloading video with yt-dlp. It finds links in text, builds yt-dlp commands, parses yt-dlp's output into progress, runs single and batch jobs, handles sites that need a login, and reports errors as codes. A host app supplies only a small Runner (start yt-dlp, stream its lines). Zero runtime dependencies; no DOM or Node APIs.
+
+Use the package; do not copy or rewrite its logic. Render `Job` objects and write your own UI wording from `Job.error.code`.
+
+## Start here
+- [README](./README.md): overview, install, a 30-second example
+- [AGENTS](./AGENTS.md): rules, decision tree and verification checklist for AI agents
+
+## Reference
+- [API](./docs/API.md): createYoink options, every method, events, types, error codes, pure helpers
+- [PORTS](./docs/PORTS.md): how to write a Runner, Authenticator and Storage; contract tests
+- [ARCHITECTURE](./docs/ARCHITECTURE.md): how it works and why
+
+## Guides
+- [RECIPES](./docs/RECIPES.md): NAS/Node service, HTTP server, React, Tauri, Android TV, custom folders
+- [YT-DLP-NOTES](./docs/YT-DLP-NOTES.md): bundling, cookies, cancel semantics, format pitfalls, site quirks
+- [CONTEXT](./docs/CONTEXT.md): what Yoink is, why this exists, history
+- [MIGRATION](./docs/MIGRATION.md): moving an app with its own copy of this logic onto the package
+
+## Related packages
+- @marknotton/yoink-runner-node: Runner for Node (child_process), plus a cookies-file Authenticator
+
+## Key facts
+- Entry point: `createYoink({ runner, outputDir, storage?, authenticator?, policy?, concurrency? })`
+- Methods: probe, download, batch, getJobs, cancel, retry, dismiss, clearFinished, subscribe, idle, signIn, signOut, signedIn
+- Job status: queued | fetching | running | done | error
+- Error codes: NEEDS_LOGIN | UNAVAILABLE | NO_FORMATS | CANCELLED | FAILED
+- Only platform-specific code: the Runner. Never run yt-dlp or parse its output yourself.

@@ -1,7 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { buildManifest } from "../scripts/lib/manifest.mjs"
-import { loadLib } from "./load-ts.mjs"
 
 test("a single-platform release keeps the other platform, with its own version", () => {
   const A = buildManifest({
@@ -34,5 +33,4 @@ test("versions compare numerically", async () => {
   for (const [a, b, want] of [["1.10.0", "1.9.0", true], ["1.9.0", "1.10.0", false], ["1.4.0", "1.4.0", false], ["v1.4.1", "1.4.0", true], ["2.0.0", "1.99.99", true], ["1.4", "1.4.0", false]]) {
     assert.equal(isNewerVersion(a, b), want, `${a} vs ${b}`)
   }
-  void loadLib
 })

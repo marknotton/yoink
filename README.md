@@ -58,6 +58,13 @@ newer on a 64-bit ARM device.
 
 Both apps check for updates after launch. **About → Check for updates** does it on demand.
 
+## Use Yoink's engine in your own app
+
+Everything that isn't a screen (finding links in text, picking formats, running yt-dlp, batches, retries, logins)
+is a separate, UI-free package: [`@marknotton/yoink-core`](app/packages/core). Another app, a NAS tool or a TV app can
+depend on it and write only its own screens and a small adapter for its platform. It has full documentation
+written for AI agents too: start at [`app/packages/core/AGENTS.md`](app/packages/core/AGENTS.md).
+
 ## Build from source
 
 The app lives in [`app/`](app) and is built with [Tauri v2](https://tauri.app) (Rust) and React. You'll need
