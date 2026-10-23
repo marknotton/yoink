@@ -1,6 +1,7 @@
 // Desktop sign-in: a throwaway browser window where the user logs in to a site, after which
 // the session cookies are read from it and saved for yt-dlp. Yoink never sees the password.
-use serde::Serialize;
+use base64::Engine;
+use serde::{Deserialize, Serialize};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -92,6 +93,39 @@ pub struct SigninStatus {
     done: bool,
 }
 
+/// What proves a login. A cookie name alone isn't enough where logged-out visitors get the same
+/// cookie, so a rule can also reject a token whose own claims say it belongs to an anonymous subject.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerRule {
+    name: String,
+    jwt_sub_not: Option<Vec<String>>,
+}
+
+// the "sub" claim of a JWT, read locally; the token never leaves this machine
+fn jwt_sub(value: &str) -> Option<String> {
+    let payload = value.split('.').nth(1)?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    json.get("sub")?.as_str().map(String::from)
+}
+
+fn proves_login(rule: &MarkerRule, name: &str, value: &str) -> bool {
+    if rule.name != name {
+        return false;
+    }
+    match &rule.jwt_sub_not {
+        None => true,
+        Some(anonymous) => jwt_sub(value).map(|sub| !anonymous.contains(&sub)).unwrap_or(false),
+    }
+}
+
+/// Describe a cookie for the "here's what I saw" message: its name, flagged if it's a logged-out token.
+fn describe(rules: &[MarkerRule], name: &str, value: &str) -> String {
+    let logged_out = rules.iter().any(|r| r.name == name && r.jwt_sub_not.as_ref().is_some_and(|bad| jwt_sub(value).is_some_and(|s| bad.contains(&s))));
+    if logged_out { format!("{name} [logged-out]") } else { name.to_string() }
+}
+
 fn parse_urls(urls: &[String]) -> Vec<Url> {
     urls.iter().filter_map(|u| u.parse::<Url>().ok()).collect()
 }
@@ -119,26 +153,28 @@ pub async fn signin_open(app: AppHandle, url: String, title: String) -> Result<(
 }
 
 #[tauri::command]
-pub async fn signin_status(app: AppHandle, urls: Vec<String>, markers: Vec<String>) -> SigninStatus {
+pub async fn signin_status(app: AppHandle, urls: Vec<String>, markers: Vec<MarkerRule>) -> SigninStatus {
     let Some(window) = app.get_webview_window(WINDOW) else {
         return SigninStatus { open: false, signed_in: false, done: false };
     };
     let signed_in = !markers.is_empty()
         && parse_urls(&urls).into_iter().any(|u| {
-            window.cookies_for_url(u).map(|cs| cs.iter().any(|c| markers.iter().any(|m| c.name() == m))).unwrap_or(false)
+            window.cookies_for_url(u).map(|cs| cs.iter().any(|c| markers.iter().any(|m| proves_login(m, c.name(), c.value())))).unwrap_or(false)
         });
     SigninStatus { open: true, signed_in, done: false }
 }
 
 /// Take the cookies out of the sign-in window, merge them into the saved file, close the window.
 #[tauri::command]
-pub async fn signin_finish(app: AppHandle, urls: Vec<String>, markers: Vec<String>, force: Option<bool>) -> Result<usize, String> {
+pub async fn signin_finish(app: AppHandle, urls: Vec<String>, markers: Vec<MarkerRule>, force: Option<bool>) -> Result<usize, String> {
     let window = app.get_webview_window(WINDOW).ok_or("The sign-in window was closed.")?;
     let mut fresh: Vec<String> = Vec::new();
+    let mut seen: Vec<(String, String)> = Vec::new(); // (name, value), for the login check only
     let mut domains: Vec<String> = Vec::new();
     for url in parse_urls(&urls) {
         let host = url.host_str().unwrap_or("").to_string();
         for c in window.cookies_for_url(url).map_err(|e| e.to_string())? {
+            seen.push((c.name().to_string(), c.value().to_string()));
             let domain = c.domain().map(String::from).unwrap_or_else(|| host.clone());
             let bare = domain.trim_start_matches('.').to_lowercase();
             let expiry = c.expires_datetime().map(|d| d.unix_timestamp()).unwrap_or(now() + 365 * 24 * 3600); // session cookies: a year
@@ -157,15 +193,17 @@ pub async fn signin_finish(app: AppHandle, urls: Vec<String>, markers: Vec<Strin
             }
         }
     }
+    // where the sign-in window is pointed (host and path only), to tell "still on the login page" from "logged in"
+    let where_now = window.url().map(|u| format!("{}{}", u.host_str().unwrap_or(""), u.path())).unwrap_or_default();
     if fresh.is_empty() {
-        return Err("NOT_SIGNED_IN|".into());
+        return Err(format!("NOT_SIGNED_IN||{where_now}"));
     }
     // A logged-out visitor already has cookies, so "some cookies" proves nothing. Where we know
     // what a login looks like, insist on it, and say which cookies we did see (names only).
     if !force.unwrap_or(false) && !markers.is_empty() {
-        let names: Vec<String> = fresh.iter().filter_map(|l| l.split('\t').nth(5).map(String::from)).collect();
-        if !names.iter().any(|n| markers.contains(n)) {
-            return Err(format!("NOT_SIGNED_IN|{}", names.join(", ")));
+        if !seen.iter().any(|(n, v)| markers.iter().any(|m| proves_login(m, n, v))) {
+            let names: Vec<String> = seen.iter().map(|(n, v)| describe(&markers, n, v)).collect();
+            return Err(format!("NOT_SIGNED_IN|{}|{where_now}", names.join(", ")));
         }
     }
     let path = cookies_file(&app)?;
@@ -191,4 +229,48 @@ pub async fn cookies_forget(app: AppHandle, domains: Vec<String>) -> Result<(), 
     let targets: Vec<String> = domains.iter().map(|d| d.trim_start_matches('.').to_lowercase()).collect();
     let kept: Vec<String> = read_lines(&path).into_iter().filter(|l| !matches_any(&domain_of(l), &targets)).collect();
     write_lines(&path, &kept)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // header.payload.signature, payload = base64url(json)
+    fn token(json: &str) -> String {
+        let enc = |s: &str| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(s);
+        format!("{}.{}.sig", enc(r#"{"alg":"RS256","typ":"JWT"}"#), enc(json))
+    }
+
+    fn reddit_rules() -> Vec<MarkerRule> {
+        vec![
+            MarkerRule { name: "reddit_session".into(), jwt_sub_not: None },
+            MarkerRule { name: "token_v2".into(), jwt_sub_not: Some(vec!["loid".into()]) },
+        ]
+    }
+
+    #[test]
+    fn a_logged_out_token_does_not_prove_a_login() {
+        let anonymous = token(r#"{"sub":"loid","lid":"t2_abc","cid":"x"}"#);
+        assert!(!proves_login(&reddit_rules()[1], "token_v2", &anonymous));
+        assert!(describe(&reddit_rules(), "token_v2", &anonymous).ends_with("[logged-out]"));
+    }
+
+    #[test]
+    fn a_token_belonging_to_a_user_proves_a_login() {
+        let user = token(r#"{"sub":"t2_1a2b3c","lid":"t2_abc"}"#);
+        assert!(proves_login(&reddit_rules()[1], "token_v2", &user));
+        assert_eq!(describe(&reddit_rules(), "token_v2", &user), "token_v2");
+    }
+
+    #[test]
+    fn a_plain_login_cookie_is_enough_by_name() {
+        assert!(proves_login(&reddit_rules()[0], "reddit_session", "anything"));
+        assert!(!proves_login(&reddit_rules()[0], "csrf_token", "anything"));
+    }
+
+    #[test]
+    fn something_that_is_not_a_token_never_counts() {
+        assert!(!proves_login(&reddit_rules()[1], "token_v2", "not-a-jwt"));
+        assert!(!proves_login(&reddit_rules()[1], "token_v2", ""));
+    }
 }

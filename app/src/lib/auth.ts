@@ -3,6 +3,11 @@
 // Yoink opens the site's own login page in a window, the user logs in normally, and the
 // session is saved for yt-dlp to reuse. The password is never seen by Yoink.
 
+/** What proves a login. A bare name means "this cookie exists". Some sites give logged-out visitors
+ *  the same cookie name, so a rule can also say: only count it if the token inside it doesn't
+ *  belong to one of these anonymous subjects (read from the token's own claims, locally). */
+export type MarkerRule = { name: string; jwtSubNot?: string[] }
+
 export type SignInSite = {
   id: string
   label: string
@@ -10,7 +15,7 @@ export type SignInSite = {
   /** where this site's cookies live (a site can span several domains) */
   cookieUrls: string[]
   /** a cookie that only exists once you're logged in: lets Yoink notice by itself */
-  markers: string[]
+  markers: MarkerRule[]
   /** domains to forget when signing out */
   domains: string[]
   note?: string
@@ -22,8 +27,8 @@ export const SITES: SignInSite[] = [
     label: "Reddit",
     loginUrl: "https://www.reddit.com/login",
     cookieUrls: ["https://www.reddit.com/", "https://reddit.com/"],
-    // token_v2 is NOT a login marker: Reddit gives it to logged-out visitors too
-    markers: ["reddit_session"],
+    // token_v2 exists for logged-out visitors too, but then its subject is the literal "loid"
+    markers: [{ name: "reddit_session" }, { name: "token_v2", jwtSubNot: ["loid"] }],
     domains: ["reddit.com"],
   },
   {
@@ -31,7 +36,7 @@ export const SITES: SignInSite[] = [
     label: "Instagram",
     loginUrl: "https://www.instagram.com/accounts/login/",
     cookieUrls: ["https://www.instagram.com/"],
-    markers: ["sessionid"],
+    markers: [{ name: "sessionid" }],
     domains: ["instagram.com"],
   },
   {
@@ -39,7 +44,7 @@ export const SITES: SignInSite[] = [
     label: "X / Twitter",
     loginUrl: "https://x.com/i/flow/login",
     cookieUrls: ["https://x.com/", "https://twitter.com/"],
-    markers: ["auth_token"],
+    markers: [{ name: "auth_token" }],
     domains: ["x.com", "twitter.com"],
   },
   {
@@ -47,7 +52,7 @@ export const SITES: SignInSite[] = [
     label: "TikTok",
     loginUrl: "https://www.tiktok.com/login",
     cookieUrls: ["https://www.tiktok.com/"],
-    markers: ["sessionid"],
+    markers: [{ name: "sessionid" }],
     domains: ["tiktok.com"],
   },
   {
@@ -55,7 +60,7 @@ export const SITES: SignInSite[] = [
     label: "Facebook",
     loginUrl: "https://www.facebook.com/login",
     cookieUrls: ["https://www.facebook.com/"],
-    markers: ["c_user", "xs"],
+    markers: [{ name: "c_user" }, { name: "xs" }],
     domains: ["facebook.com"],
   },
   {
@@ -63,7 +68,7 @@ export const SITES: SignInSite[] = [
     label: "Threads",
     loginUrl: "https://www.threads.net/login",
     cookieUrls: ["https://www.threads.net/", "https://www.threads.com/"],
-    markers: ["sessionid"],
+    markers: [{ name: "sessionid" }],
     domains: ["threads.net", "threads.com"],
   },
   {
@@ -71,7 +76,7 @@ export const SITES: SignInSite[] = [
     label: "YouTube",
     loginUrl: "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F",
     cookieUrls: ["https://www.youtube.com/", "https://accounts.google.com/", "https://www.google.com/"],
-    markers: ["SID", "__Secure-3PSID"],
+    markers: [{ name: "SID" }, { name: "__Secure-3PSID" }],
     domains: ["youtube.com", "google.com"],
     note: "Google sometimes refuses sign-ins from embedded windows. Most YouTube videos don't need one.",
   },

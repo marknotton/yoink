@@ -4,6 +4,7 @@ import { LogicalSize } from "@tauri-apps/api/dpi"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { open } from "@tauri-apps/plugin-dialog"
 import { readText } from "@tauri-apps/plugin-clipboard-manager"
+import type { MarkerRule } from "./auth"
 import type { Progress } from "./ytdlp"
 
 export const isAndroid = /Android/i.test(navigator.userAgent)
@@ -82,7 +83,7 @@ export async function readClipboardText(): Promise<string> {
 // Same four calls on both platforms: open a sign-in window, watch it, take the session, forget it.
 export type SigninStatus = { open: boolean; signedIn: boolean; done: boolean }
 export const signinOpen = (url: string, title: string) => invoke("signin_open", { url, title })
-export const signinStatus = (urls: string[], markers: string[]) => invoke<SigninStatus>("signin_status", { urls, markers })
-export const signinFinish = (urls: string[], markers: string[], force = false) => invoke<number>("signin_finish", { urls, markers, force })
+export const signinStatus = (urls: string[], markers: MarkerRule[]) => invoke<SigninStatus>("signin_status", { urls, markers })
+export const signinFinish = (urls: string[], markers: MarkerRule[], force = false) => invoke<number>("signin_finish", { urls, markers, force })
 export const signinCancel = () => invoke("signin_cancel")
 export const cookiesForget = (domains: string[]) => invoke("cookies_forget", { domains })

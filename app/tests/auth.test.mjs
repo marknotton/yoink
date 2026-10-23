@@ -22,7 +22,10 @@ test("recognises yt-dlp's 'you need to log in' wording", () => {
   assert.ok(!needsLogin("HTTP Error 404: Not Found"))
 })
 
-test("Reddit's token_v2 is not a login marker (it is also given to logged-out visitors)", () => {
+test("Reddit's token_v2 only proves a login when it isn't the anonymous 'loid' token", () => {
   const reddit = SITES.find((s) => s.id === "reddit")
-  assert.deepEqual(reddit.markers, ["reddit_session"])
+  assert.ok(reddit.markers.some((m) => m.name === "reddit_session"))
+  // token_v2 only counts when it does NOT belong to the anonymous "loid" subject
+  const token = reddit.markers.find((m) => m.name === "token_v2")
+  assert.deepEqual(token.jwtSubNot, ["loid"])
 })

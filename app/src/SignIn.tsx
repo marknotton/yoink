@@ -13,7 +13,7 @@ export function SignInDialog({ site, onSignedIn, onClose }: { site: SignInSite; 
   const [error, setError] = useState<string | null>(null)
   const finishing = useRef(false)
   // set when Done was pressed but no login cookie was seen: the cookie names we did see
-  const [unsure, setUnsure] = useState<string[] | null>(null)
+  const [unsure, setUnsure] = useState<{ cookies: string[]; where: string } | null>(null)
 
   const finish = async (force = false) => {
     if (finishing.current) return
@@ -29,7 +29,8 @@ export function SignInDialog({ site, onSignedIn, onClose }: { site: SignInSite; 
       const message = e instanceof Error ? e.message : String(e)
       if (message.startsWith(NOT_SIGNED_IN)) {
         // not an error to show raw: it means "you don't look logged in yet"
-        setUnsure(message.slice(NOT_SIGNED_IN.length).split(", ").filter(Boolean))
+        const [names = "", where = ""] = message.slice(NOT_SIGNED_IN.length).split("|")
+        setUnsure({ cookies: names.split(", ").filter(Boolean), where })
         setError(null)
       } else {
         setError(message)
@@ -114,7 +115,8 @@ export function SignInDialog({ site, onSignedIn, onClose }: { site: SignInSite; 
                   <AlertIcon />
                   <span>
                     You don’t look signed in to {site.label} yet. Finish logging in, let the page load, then press Done again.
-                    {unsure.length > 0 && <span className="meta"> Cookies seen: {unsure.join(", ")}.</span>}
+                    {unsure.where && <span className="meta">The sign-in window is on: {unsure.where}.</span>}
+                    {unsure.cookies.length > 0 && <span className="meta">Cookies seen: {unsure.cookies.join(", ")}.</span>}
                   </span>
                 </div>
               )}
