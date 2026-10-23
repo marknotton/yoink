@@ -132,7 +132,7 @@ pub async fn signin_status(app: AppHandle, urls: Vec<String>, markers: Vec<Strin
 
 /// Take the cookies out of the sign-in window, merge them into the saved file, close the window.
 #[tauri::command]
-pub async fn signin_finish(app: AppHandle, urls: Vec<String>) -> Result<usize, String> {
+pub async fn signin_finish(app: AppHandle, urls: Vec<String>, markers: Vec<String>, force: Option<bool>) -> Result<usize, String> {
     let window = app.get_webview_window(WINDOW).ok_or("The sign-in window was closed.")?;
     let mut fresh: Vec<String> = Vec::new();
     let mut domains: Vec<String> = Vec::new();
@@ -158,7 +158,15 @@ pub async fn signin_finish(app: AppHandle, urls: Vec<String>) -> Result<usize, S
         }
     }
     if fresh.is_empty() {
-        return Err("No sign-in was found yet. Finish logging in first, then press Done.".into());
+        return Err("NOT_SIGNED_IN|".into());
+    }
+    // A logged-out visitor already has cookies, so "some cookies" proves nothing. Where we know
+    // what a login looks like, insist on it, and say which cookies we did see (names only).
+    if !force.unwrap_or(false) && !markers.is_empty() {
+        let names: Vec<String> = fresh.iter().filter_map(|l| l.split('\t').nth(5).map(String::from)).collect();
+        if !names.iter().any(|n| markers.contains(n)) {
+            return Err(format!("NOT_SIGNED_IN|{}", names.join(", ")));
+        }
     }
     let path = cookies_file(&app)?;
     let mut lines: Vec<String> = read_lines(&path).into_iter().filter(|l| !matches_any(&domain_of(l), &domains)).collect();

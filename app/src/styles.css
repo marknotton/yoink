@@ -378,3 +378,6 @@ li:last-child.job { border-bottom: 0; }
 .signin-add .btn--small { margin: 0; flex-shrink: 0; }
 .select { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 5px 8px; background: var(--bg); color: var(--text); border: 1px solid var(--border-input); border-radius: var(--radius-sm); }
 .android .select { font-size: 16px; padding: 9px 10px; }
+
+.callout--warning { background: var(--warning-soft); border-color: var(--warning-border); color: var(--warning); }
+.callout--warning .meta { display: block; margin-top: 2px; color: var(--text-2); }

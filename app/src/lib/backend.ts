@@ -83,6 +83,6 @@ export async function readClipboardText(): Promise<string> {
 export type SigninStatus = { open: boolean; signedIn: boolean; done: boolean }
 export const signinOpen = (url: string, title: string) => invoke("signin_open", { url, title })
 export const signinStatus = (urls: string[], markers: string[]) => invoke<SigninStatus>("signin_status", { urls, markers })
-export const signinFinish = (urls: string[]) => invoke<number>("signin_finish", { urls })
+export const signinFinish = (urls: string[], markers: string[], force = false) => invoke<number>("signin_finish", { urls, markers, force })
 export const signinCancel = () => invoke("signin_cancel")
 export const cookiesForget = (domains: string[]) => invoke("cookies_forget", { domains })

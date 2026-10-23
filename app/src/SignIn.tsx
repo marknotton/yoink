@@ -5,23 +5,35 @@ import type { SignInSite } from "./lib/auth"
 
 type Step = "intro" | "waiting" | "finishing" | "ok" | "failed"
 
+const NOT_SIGNED_IN = "NOT_SIGNED_IN|"
+
 // One screen for the whole sign-in: explain, open the site's login page, notice when it worked.
 export function SignInDialog({ site, onSignedIn, onClose }: { site: SignInSite; onSignedIn: () => void; onClose: () => void }) {
   const [step, setStep] = useState<Step>("intro")
   const [error, setError] = useState<string | null>(null)
   const finishing = useRef(false)
+  // set when Done was pressed but no login cookie was seen: the cookie names we did see
+  const [unsure, setUnsure] = useState<string[] | null>(null)
 
-  const finish = async () => {
+  const finish = async (force = false) => {
     if (finishing.current) return
     finishing.current = true
     setStep("finishing")
     try {
-      await backend.signinFinish(site.cookieUrls)
+      await backend.signinFinish(site.cookieUrls, site.markers, force)
+      setUnsure(null)
       setStep("ok")
       setTimeout(onSignedIn, 900)
     } catch (e) {
       finishing.current = false
-      setError(e instanceof Error ? e.message : String(e))
+      const message = e instanceof Error ? e.message : String(e)
+      if (message.startsWith(NOT_SIGNED_IN)) {
+        // not an error to show raw: it means "you don't look logged in yet"
+        setUnsure(message.slice(NOT_SIGNED_IN.length).split(", ").filter(Boolean))
+        setError(null)
+      } else {
+        setError(message)
+      }
       setStep("waiting")
     }
   }
@@ -97,8 +109,18 @@ export function SignInDialog({ site, onSignedIn, onClose }: { site: SignInSite; 
                   : "Log in in the window that just opened, then press Done here."}
               </p>
               {error && <p className="note note--error"><AlertIcon /> {error}</p>}
+              {unsure && (
+                <div className="callout callout--warning">
+                  <AlertIcon />
+                  <span>
+                    You don’t look signed in to {site.label} yet. Finish logging in, let the page load, then press Done again.
+                    {unsure.length > 0 && <span className="meta"> Cookies seen: {unsure.join(", ")}.</span>}
+                  </span>
+                </div>
+              )}
               <div className="modal__actions">
                 <button className="btn btn--ghost" onClick={close}>Cancel</button>
+                {unsure && <button className="btn btn--secondary" onClick={() => void finish(true)}>Save anyway</button>}
                 {!backend.isAndroid && <button className="btn btn--primary" onClick={() => void finish()}>I’ve signed in — Done</button>}
               </div>
             </>
