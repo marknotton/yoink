@@ -1,0 +1,40 @@
+{
+  "name": "@marknotton/yoink-runner-node",
+  "version": "0.1.0",
+  "description": "Runs yt-dlp from Node for @marknotton/yoink-core: for servers, NAS tools, CLIs and tests.",
+  "keywords": [
+    "yt-dlp",
+    "yoink",
+    "node"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "pretest": "yarn build",
+    "test": "node --test tests/*.test.mjs",
+    "prepack": "yarn build"
+  },
+  "dependencies": {
+    "@marknotton/yoink-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

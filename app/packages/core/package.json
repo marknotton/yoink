@@ -1,0 +1,42 @@
+{
+  "name": "@marknotton/yoink-core",
+  "version": "0.1.0",
+  "description": "The headless engine behind Yoink: find links in text, pick formats, drive yt-dlp, track jobs, handle logins. No UI, no platform code.",
+  "keywords": [
+    "yt-dlp",
+    "video",
+    "downloader",
+    "headless",
+    "engine"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "AGENTS.md",
+    "llms.txt",
+    "docs"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "pretest": "yarn build",
+    "test": "node --test tests/*.test.mjs",
+    "prepack": "yarn build"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

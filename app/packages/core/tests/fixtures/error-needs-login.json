@@ -1,0 +1,6 @@
+{
+  "exitCode": 1,
+  "stderr": [
+    "ERROR: [Reddit] 1xd5von: Account authentication is required. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies"
+  ]
+}

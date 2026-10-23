@@ -1,0 +1,25 @@
+{
+  "choice": "Audio only",
+  "exitCode": 0,
+  "stdout": [
+    "[youtube] Extracting URL: https://www.youtube.com/watch?v=jNQXAC9IVRw",
+    "[youtube] jNQXAC9IVRw: Downloading webpage",
+    "[youtube] jNQXAC9IVRw: Downloading visionos player API JSON",
+    "[youtube] jNQXAC9IVRw: Downloading m3u8 information",
+    "[info] jNQXAC9IVRw: Downloading 1 format(s): 251",
+    "[download] Destination: /OUT/Me at the zoo.webm",
+    "YOINK|1024|252182|NA|318617.7519287834|0",
+    "YOINK|3072|252182|NA|864410.431235744|0",
+    "YOINK|7168|252182|NA|1909965.7627850836|0",
+    "YOINK|15360|252182|NA|3910440.6336874054|0",
+    "YOINK|31744|252182|NA|7723865.075762849|0",
+    "YOINK|64512|252182|NA|3698458.7368680034|0",
+    "YOINK|130048|252182|NA|5818497.286198878|0",
+    "YOINK|252182|252182|NA|7261024.571146136|0",
+    "YOINK|252182|252182|NA|3203091.176297086|NA",
+    "[ExtractAudio] Destination: /OUT/Me at the zoo.mp3",
+    "Deleting original file /OUT/Me at the zoo.webm (pass -k to keep)",
+    "/OUT/Me at the zoo.mp3"
+  ],
+  "stderr": []
+}
