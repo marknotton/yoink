@@ -22,6 +22,9 @@ terminal.
 - **Batch downloads.** Paste a whole list (or any text with links in it) and Yoink finds every link, tidies
   them, drops duplicates, looks each one up and downloads the best quality available, three at a time. One bad
   link doesn't stop the rest. There's an audio-only (mp3) option too.
+- **Sign in to sites that need it** (Mac). Reddit, and sometimes Instagram or X, only share video with signed-in
+  users. Yoink opens the site's own login page in a window; log in normally and it remembers the session, which
+  stays on your device and is only used for that site.
 - **A sensible format list.** One row per resolution with an estimated size, plus audio-only mp3. If a video
   only comes in one quality, it asks whether you want video with audio, or audio only.
 - **Plays everywhere on Apple devices.** It prefers H.264 and AAC, so files open in QuickTime and Quick Look.
