@@ -19,6 +19,9 @@ Use the package; do not copy or rewrite its logic. Render `Job` objects and writ
 - [CONTEXT](./docs/CONTEXT.md): what Yoink is, why this exists, history
 - [MIGRATION](./docs/MIGRATION.md): moving an app with its own copy of this logic onto the package
 
+## Install
+- Tarballs from a GitHub Release (`packages-vX.Y.Z`) or npm. Install `@marknotton/yoink-core` and `@marknotton/yoink-runner-node` together (the runner has the core as a peer dependency). NOT from the git repo: see README.
+
 ## Related packages
 - @marknotton/yoink-runner-node: Runner for Node (child_process), plus a cookies-file Authenticator
 

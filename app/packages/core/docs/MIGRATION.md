@@ -50,8 +50,8 @@ The package was extracted from the app, so the app is the first consumer to migr
 
 | Part | State |
 | --- | --- |
-| Pure TypeScript (formats, links, sites, errors, parse, args) | In the package. The app's `src/lib` files are being reduced to re-exports. |
-| Job queue, batch, retry and login policy (in `App.tsx`) | In the package. The app still has its own copy until its UI is moved onto `getJobs()`/`subscribe()`. |
+| Pure TypeScript (formats, links, sites, errors, args) | **Done.** The app's `src/lib` files are re-exports of the package; its formats, batch link-finding and site list now come from it (verified with a Mac build, an Android build and a real batch download). |
+| Job queue, batch, retry and login policy (in `App.tsx`) | In the package, but the app still has its **own copy** in `App.tsx` until its UI is moved onto `getJobs()`/`subscribe()`. This is the next step, and the largest. |
 | Rust runner/parser (`desktop.rs`) | Duplicates `DownloadTracker`. To become a thin line-streaming `Runner`. |
 | Kotlin runner/parser (`YoinkPlugin.kt`) | Same, for Android. Needs a line channel (polling) to JS. |
 | Sign-in window (`signin.rs`) | Stays in Rust as the desktop `Authenticator`'s native half. |

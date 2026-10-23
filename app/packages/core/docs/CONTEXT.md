@@ -59,8 +59,10 @@ updating the package.
 
 - **The package is complete, tested and documented** (36 core tests against real yt-dlp recordings; 9 runner tests; a
   real-binary end-to-end test; an HTTP example with tests).
-- **The Yoink app itself has not yet been moved onto it** for the download path. Its Rust and Kotlin still contain
-  their own runners and parsers. See [MIGRATION](./MIGRATION.md) for the plan; the pure TypeScript is moved first.
+- **The Yoink app uses the package for its pure TypeScript** (formats, links, sites, errors). It has **not yet** been
+  moved onto the package's job engine or `Runner`: `App.tsx` still has its own queue/retry/login code, and the Rust
+  and Kotlin still contain their own runners and parsers. See [MIGRATION](./MIGRATION.md) for the plan.
+- **Install:** tarballs on a GitHub Release or npm. Installing from the git repo does not work (see the README).
 - Sign-in is implemented for macOS (a window, cookie detection by token claims). **Android sign-in is not built yet.**
 
 ## Glossary

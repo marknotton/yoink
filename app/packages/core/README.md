@@ -19,19 +19,35 @@ yt-dlp with these arguments and stream me its lines".
 
 ## Install
 
-```sh
-# once published to npm
-yarn add @marknotton/yoink-core
+Two packages: the engine, and (for Node) a ready-made runner. The runner declares the engine as a **peer
+dependency**, so install them together and you get exactly one copy of the engine.
 
-# until then, straight from GitHub (yarn 4)
-yarn add @marknotton/yoink-core@https://github.com/marknotton/yoink.git#workspace=@marknotton/yoink-core
-```
-
-For Node you also want the ready-made runner:
+**From the tarballs on a GitHub Release** (works with npm, yarn and pnpm; no registry account needed):
 
 ```sh
-yarn add @marknotton/yoink-runner-node
+yarn add https://github.com/marknotton/yoink/releases/download/packages-v0.1.0/yoink-core-0.1.0.tgz \
+         https://github.com/marknotton/yoink/releases/download/packages-v0.1.0/yoink-runner-node-0.1.0.tgz
 ```
+
+**From npm**, once published (`yarn workspace @marknotton/yoink-core npm publish --access public`):
+
+```sh
+yarn add @marknotton/yoink-core @marknotton/yoink-runner-node
+```
+
+**Inside this repo** (a workspace): `"@marknotton/yoink-core": "workspace:*"`. That's how the Yoink app itself uses it.
+
+**Updating:** point the URL at the newer `packages-vX.Y.Z` release (or `yarn up` for npm). Versions follow semver:
+breaking changes only in a major version.
+
+> **Not supported: installing straight from the git repo** (`github:marknotton/yoink`, `yarn add …git#workspace=…`).
+> The packages live under `app/`, and the repository root is a different project (the original terminal app), so
+> the package manager can't find them there. (Yarn 4 also refuses git dependencies unless the repo is listed in
+> `approvedGitRepositories` in `.yarnrc.yml`.) Use the tarballs or npm.
+
+> **Maintainers:** `yarn release:packages` builds, tests, packs, proves the tarballs install into an empty
+> project, and publishes the release **as non-latest**. That flag matters: the Yoink *app's* updater reads
+> `/releases/latest/download/latest.json`, so a package release must never become the repo's "Latest".
 
 ## Thirty seconds
 
