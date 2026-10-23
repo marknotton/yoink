@@ -2,7 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { loadLib } from "./load-ts.mjs"
 
-const { siteForUrl, needsLogin, SITES } = await loadLib("auth")
+const { siteForUrl, needsLogin, isSignInLink, SITES } = await loadLib("auth")
 
 test("finds the site whose login unlocks a link", () => {
   assert.equal(siteForUrl("https://www.reddit.com/r/x/comments/1/y/").id, "reddit")
@@ -28,4 +28,11 @@ test("Reddit's token_v2 only proves a login when it isn't the anonymous 'loid' t
   // token_v2 only counts when it does NOT belong to the anonymous "loid" subject
   const token = reddit.markers.find((m) => m.name === "token_v2")
   assert.deepEqual(token.jwtSubNot, ["loid"])
+})
+
+test("recognises emailed sign-in links so they are never treated as videos", () => {
+  assert.ok(isSignInLink("https://www.reddit.com/magic_link/mlt:J8vVTV6DXWwGgWEbDpXLIFNR0UBApQ/t2_7q6qd?$deep_link=true&otp=true"))
+  assert.ok(isSignInLink("https://www.reddit.com/login/"))
+  assert.ok(!isSignInLink("https://www.reddit.com/r/singularity/comments/1xd5von/claude_made_a_documentary/"))
+  assert.ok(!isSignInLink("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
 })

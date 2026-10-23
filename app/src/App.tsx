@@ -5,7 +5,7 @@ import { UpdateToast } from "./UpdateToast"
 import { Logo } from "./logo"
 import { ExternalIcon, UpdateAvailableIcon, AlertIcon, CheckIcon, ClockIcon, DownloadIcon, FolderIcon, MusicIcon, PasteIcon, VideoIcon } from "./icons"
 import { formatDuration, formatEta, formatSpeed, formatBytes, tildify } from "./lib/format"
-import { needsLogin, siteForUrl, SITES, type SignedIn, type SignInSite } from "./lib/auth"
+import { isSignInLink, needsLogin, siteForUrl, SITES, type SignedIn, type SignInSite } from "./lib/auth"
 import { SignInDialog } from "./SignIn"
 import { extractUrls, pickChoice, runPool, type BatchQuality } from "./lib/batch"
 import { detectPlatform, isProbablyUrl, type Platform } from "./lib/platforms"
@@ -226,7 +226,7 @@ export default function App() {
       const chrome = 28 + 57 + 16 + 20 // appbar + footer + content padding
       const max = Math.max(300, window.screen.availHeight - 40)
       // the About dialog is taller than the home screen, so the window makes room for it
-      const wanted = Math.max(300, Math.ceil(inner.offsetHeight) + chrome, aboutOpen ? 560 : 0)
+      const wanted = Math.max(300, Math.ceil(inner.offsetHeight) + chrome, aboutOpen ? 560 : 0, signInFor ? 600 : 0)
       const height = Math.min(max, wanted)
       if (Math.abs(height - window.innerHeight) > 1) {
         backend.fitWindowHeight(height)
@@ -236,7 +236,7 @@ export default function App() {
     observer.observe(inner)
     fit()
     return () => observer.disconnect()
-  }, [aboutOpen])
+  }, [aboutOpen, signInFor])
 
   useEffect(() => {
     if (outDir) return
@@ -318,6 +318,10 @@ export default function App() {
   const submit = useCallback(
     (value: string) => {
       const trimmed = value.trim()
+      if (isProbablyUrl(trimmed) && isSignInLink(trimmed)) {
+        setPhase({ name: "input", warning: "That’s a sign-in link, not a video. To use it, press “Sign in” first, then paste it into the sign-in box." })
+        return
+      }
       if (!isProbablyUrl(trimmed)) {
         setPhase({ name: "input", warning: "That doesn’t look like a link — paste a full URL." })
         return
@@ -346,6 +350,7 @@ export default function App() {
     if (phase.name !== "input") return
     const onPaste = (e: ClipboardEvent) => {
       if (batchOpen) return // the batch box takes pasted text as it is
+      if (signInFor || aboutOpen) return // a dialog's own boxes take what's pasted into them
       const text = e.clipboardData?.getData("text")?.trim() ?? ""
       // more than one link: that's a batch
       if (extractUrls(text).urls.length > 1) {
@@ -360,7 +365,7 @@ export default function App() {
     }
     window.addEventListener("paste", onPaste)
     return () => window.removeEventListener("paste", onPaste)
-  }, [phase.name, submit, batchOpen])
+  }, [phase.name, submit, batchOpen, signInFor, aboutOpen])
 
   const pasteFromClipboard = async () => {
     try {
@@ -609,6 +614,9 @@ export default function App() {
   }
 
   const busy = phase.name === "probing"
+  // sites you haven't signed in to yet; the picker falls back to the first when the chosen one is taken
+  const signInChoices = SITES.filter((s) => !signins.some((x) => x.id === s.id))
+  const pickable = signInChoices.find((s) => s.id === signinPick) ?? signInChoices[0]
   // the big logo belongs to the home screen; every other page gets the small one (Android)
   // green tick = up to date, orange arrow = update available, red = the check failed
   const updateTone = updates.checking
@@ -945,15 +953,15 @@ export default function App() {
                   </div>
                 ))}
                 <div className="signin-add">
-                  <select className="select" value={signinPick} onChange={(e) => setSigninPick(e.target.value)} aria-label="Site">
-                    {SITES.filter((s) => !signins.some((x) => x.id === s.id)).map((s) => (
+                  <select className="select" value={pickable?.id ?? ""} onChange={(e) => setSigninPick(e.target.value)} aria-label="Site">
+                    {signInChoices.map((s) => (
                       <option key={s.id} value={s.id}>{s.label}</option>
                     ))}
                   </select>
                   <button
                     className="btn btn--secondary btn--small"
-                    disabled={signins.some((x) => x.id === signinPick)}
-                    onClick={() => { const site = SITES.find((s) => s.id === signinPick); if (site) { setAboutOpen(false); openSignIn(site) } }}
+                    disabled={!pickable}
+                    onClick={() => { if (pickable) { setAboutOpen(false); openSignIn(pickable) } }}
                   >
                     Sign in
                   </button>

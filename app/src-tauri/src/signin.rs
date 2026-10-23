@@ -215,6 +215,22 @@ pub async fn signin_finish(app: AppHandle, urls: Vec<String>, markers: Vec<Marke
     Ok(count)
 }
 
+/// Point the sign-in window at a link, e.g. a "log me in" link from an email, so it signs in here
+/// and not in the user's regular browser. Only the site's own domains are accepted.
+#[tauri::command]
+pub async fn signin_navigate(app: AppHandle, url: String, domains: Vec<String>) -> Result<(), String> {
+    let parsed: Url = url.trim().parse().map_err(|_| "That isn't a valid link.".to_string())?;
+    if parsed.scheme() != "https" {
+        return Err("Only https links can be opened here.".into());
+    }
+    let host = parsed.host_str().unwrap_or("").to_lowercase();
+    if !domains.iter().any(|d| host == *d || host.ends_with(&format!(".{d}"))) {
+        return Err(format!("That link isn't from {}.", domains.join(" or ")));
+    }
+    let window = app.get_webview_window(WINDOW).ok_or("The sign-in window was closed.")?;
+    window.navigate(parsed).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn signin_cancel(app: AppHandle) {
     if let Some(w) = app.get_webview_window(WINDOW) {

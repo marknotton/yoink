@@ -86,4 +86,5 @@ export const signinOpen = (url: string, title: string) => invoke("signin_open", 
 export const signinStatus = (urls: string[], markers: MarkerRule[]) => invoke<SigninStatus>("signin_status", { urls, markers })
 export const signinFinish = (urls: string[], markers: MarkerRule[], force = false) => invoke<number>("signin_finish", { urls, markers, force })
 export const signinCancel = () => invoke("signin_cancel")
+export const signinNavigate = (url: string, domains: string[]) => invoke("signin_navigate", { url, domains })
 export const cookiesForget = (domains: string[]) => invoke("cookies_forget", { domains })

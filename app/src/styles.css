@@ -381,3 +381,5 @@ li:last-child.job { border-bottom: 0; }
 
 .callout--warning { background: var(--warning-soft); border-color: var(--warning-border); color: var(--warning); }
 .callout--warning .meta { display: block; margin-top: 2px; color: var(--text-2); }
+
+.paste-link { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }

@@ -12,6 +12,7 @@ export function SignInDialog({ site, onSignedIn, onClose }: { site: SignInSite; 
   const [step, setStep] = useState<Step>("intro")
   const [error, setError] = useState<string | null>(null)
   const finishing = useRef(false)
+  const [linkText, setLinkText] = useState("")
   // set when Done was pressed but no login cookie was seen: the cookie names we did see
   const [unsure, setUnsure] = useState<{ cookies: string[]; where: string } | null>(null)
 
@@ -36,6 +37,18 @@ export function SignInDialog({ site, onSignedIn, onClose }: { site: SignInSite; 
         setError(message)
       }
       setStep("waiting")
+    }
+  }
+
+  // "email me a link": the link arrives in the mail app and would open in the user's browser, which
+  // can't hand the session to Yoink. Opening it in the sign-in window can.
+  const openLink = async () => {
+    setError(null)
+    try {
+      await backend.signinNavigate(linkText, site.domains)
+      setLinkText("")
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -109,6 +122,27 @@ export function SignInDialog({ site, onSignedIn, onClose }: { site: SignInSite; 
                   ? "Log in in the window that just opened. This closes by itself once you're signed in."
                   : "Log in in the window that just opened, then press Done here."}
               </p>
+              {!backend.isAndroid && (
+                <div className="paste-link">
+                  <p className="meta">
+                    Chose “email me a link”? Copy the link from your email and paste it here. It opens in this sign-in window, not your browser, so Yoink
+                    can see the login.
+                  </p>
+                  <div className="field">
+                    <input
+                      className="input"
+                      type="text"
+                      spellCheck={false}
+                      autoComplete="off"
+                      placeholder={`${site.loginUrl.split("/").slice(0, 3).join("/")}/…`}
+                      value={linkText}
+                      onChange={(e) => setLinkText(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && linkText.trim() && void openLink()}
+                    />
+                    <button className="btn btn--secondary" onClick={() => void openLink()} disabled={!linkText.trim()}>Open link</button>
+                  </div>
+                </div>
+              )}
               {error && <p className="note note--error"><AlertIcon /> {error}</p>}
               {unsure && (
                 <div className="callout callout--warning">

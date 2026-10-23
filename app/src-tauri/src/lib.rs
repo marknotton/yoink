@@ -43,6 +43,7 @@ pub fn run() {
             signin::signin_status,
             signin::signin_finish,
             signin::signin_cancel,
+            signin::signin_navigate,
             signin::cookies_forget
         ]);
 

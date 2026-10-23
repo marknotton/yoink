@@ -122,4 +122,7 @@ const NEEDS_LOGIN = /--cookies|authentication is required|login required|log in|
 
 export const needsLogin = (message: string) => NEEDS_LOGIN.test(message)
 
+/** An emailed "log me in" link (Reddit's magic link and similar): it logs a browser in, it isn't a video. */
+export const isSignInLink = (url: string) => /\/magic_link\/|[?&]otp=true\b|\/login\/?(\?|$)/i.test(url)
+
 export type SignedIn = { id: string; label: string }
