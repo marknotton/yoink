@@ -9,10 +9,10 @@ import type { Progress } from "./ytdlp"
 export const isAndroid = /Android/i.test(navigator.userAgent)
 
 export type ProbeResult = { info: string; infoPath: string }
-export type DownloadOptions = { url: string; infoPath: string | null; choiceArgs: string[]; outDir: string }
+export type DownloadOptions = { url: string; infoPath: string | null; choiceArgs: string[]; outDir: string; useCookies?: boolean }
 export type DownloadHandlers = { onProgress: (p: Progress) => void; onProcessing: () => void }
 
-export const probe = (url: string) => invoke<ProbeResult>("probe", { url })
+export const probe = (url: string, useCookies = false) => invoke<ProbeResult>("probe", { url, useCookies })
 export const cancelDownload = (jobId: string) => invoke("cancel_download", { jobId })
 export const openDownloads = () => invoke("open_downloads")
 export const reveal = (path: string) => invoke("reveal", { path })
@@ -77,3 +77,12 @@ export async function readClipboardText(): Promise<string> {
     return navigator.clipboard.readText()
   }
 }
+
+// ── Signing in ────────────────────────────────────────────────────
+// Same four calls on both platforms: open a sign-in window, watch it, take the session, forget it.
+export type SigninStatus = { open: boolean; signedIn: boolean; done: boolean }
+export const signinOpen = (url: string, title: string) => invoke("signin_open", { url, title })
+export const signinStatus = (urls: string[], markers: string[]) => invoke<SigninStatus>("signin_status", { urls, markers })
+export const signinFinish = (urls: string[]) => invoke<number>("signin_finish", { urls })
+export const signinCancel = () => invoke("signin_cancel")
+export const cookiesForget = (domains: string[]) => invoke("cookies_forget", { domains })

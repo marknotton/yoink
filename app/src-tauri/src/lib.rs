@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 // commands to a Kotlin plugin (youtubedl-android). The frontend can't tell.
 #[cfg(desktop)]
 mod desktop;
+#[cfg(desktop)]
+mod signin;
 #[cfg(target_os = "android")]
 mod android;
 
@@ -36,7 +38,12 @@ pub fn run() {
             desktop::open_url,
             desktop::platform_key,
             desktop::file_exists,
-            desktop::open_file
+            desktop::open_file,
+            signin::signin_open,
+            signin::signin_status,
+            signin::signin_finish,
+            signin::signin_cancel,
+            signin::cookies_forget
         ]);
 
     #[cfg(target_os = "android")]

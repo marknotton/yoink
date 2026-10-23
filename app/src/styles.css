@@ -367,3 +367,14 @@ li:last-child.job { border-bottom: 0; }
 .link-btn:hover { color: var(--accent-hover); }
 .android .textarea { font-size: 16px; }
 .android .pill--choice { padding: 10px 14px; font-size: 12px; }
+
+/* ── Sign-ins ───────────────────────────────────────────────── */
+.signins { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.signin-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.signin-row__name { display: flex; align-items: center; gap: 6px; }
+.signin-row__name svg { color: var(--success); }
+.signin-row .btn--small { margin: 0; }
+.signin-add { display: flex; gap: 8px; align-items: center; }
+.signin-add .btn--small { margin: 0; flex-shrink: 0; }
+.select { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 5px 8px; background: var(--bg); color: var(--text); border: 1px solid var(--border-input); border-radius: var(--radius-sm); }
+.android .select { font-size: 16px; padding: 9px 10px; }

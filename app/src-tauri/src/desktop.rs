@@ -1,4 +1,4 @@
-use crate::ProbeResult;
+use crate::{signin::TempCookies, ProbeResult};
 use serde::Serialize;
 use std::{
     collections::HashMap,
@@ -97,12 +97,15 @@ fn terminate(pid: u32) {
 
 // ── Commands ────────────────────────────────────────────────────
 #[tauri::command]
-pub async fn probe(app: AppHandle, url: String) -> Result<ProbeResult, String> {
+pub async fn probe(app: AppHandle, url: String, use_cookies: Option<bool>) -> Result<ProbeResult, String> {
+    let cookies = TempCookies::for_run(&app, use_cookies.unwrap_or(false));
     let output = app
         .shell()
         .sidecar("yt-dlp")
         .map_err(|e| e.to_string())?
-        .args(["-J", "--no-playlist", "--no-warnings", &url])
+        .args(["-J", "--no-playlist", "--no-warnings"])
+        .args(cookies.args())
+        .args([&url])
         .output()
         .await
         .map_err(|e| e.to_string())?;
@@ -132,7 +135,9 @@ pub async fn download(
     info_path: Option<String>,
     choice_args: Vec<String>,
     out_dir: String,
+    use_cookies: Option<bool>,
 ) -> Result<String, String> {
+    let cookies = TempCookies::for_run(&app, use_cookies.unwrap_or(false));
     state.jobs.lock().unwrap().insert(job_id.clone(), Slot::default());
     let ffmpeg = ffmpeg_path()?;
 
@@ -141,6 +146,7 @@ pub async fn download(
         None => vec![url],
     };
     args.extend(choice_args);
+    args.extend(cookies.args());
     args.extend(
         [
             "--no-playlist",

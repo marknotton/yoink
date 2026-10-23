@@ -5,6 +5,8 @@ import { UpdateToast } from "./UpdateToast"
 import { Logo } from "./logo"
 import { ExternalIcon, UpdateAvailableIcon, AlertIcon, CheckIcon, ClockIcon, DownloadIcon, FolderIcon, MusicIcon, PasteIcon, VideoIcon } from "./icons"
 import { formatDuration, formatEta, formatSpeed, formatBytes, tildify } from "./lib/format"
+import { needsLogin, siteForUrl, SITES, type SignedIn, type SignInSite } from "./lib/auth"
+import { SignInDialog } from "./SignIn"
 import { extractUrls, pickChoice, runPool, type BatchQuality } from "./lib/batch"
 import { detectPlatform, isProbablyUrl, type Platform } from "./lib/platforms"
 import { buildChoices, type DownloadChoice, type Progress, type VideoInfo } from "./lib/ytdlp"
@@ -29,7 +31,7 @@ type Phase =
   | { name: "input"; warning?: string }
   | { name: "probing"; status: string }
   | { name: "picking" }
-  | { name: "error"; message: string }
+  | { name: "error"; message: string; signIn?: SignInSite }
 
 type Job = {
   id: string
@@ -42,6 +44,10 @@ type Job = {
   // queued / fetching only happen in a batch, before the download itself starts
   status: "queued" | "fetching" | "running" | "done" | "error"
   batch?: BatchQuality
+  /** this link needed a sign-in, so yt-dlp is given the saved session for it */
+  login?: boolean
+  /** it failed because the site wants a login; offer to sign in */
+  signIn?: SignInSite
   progress?: Progress
   processing: boolean
   refreshing: boolean
@@ -101,6 +107,7 @@ type CachedProbe = {
   duration?: number
   choices: DownloadChoice[]
   infoPath?: string
+  login?: boolean
   fetchedAt: number
 }
 
@@ -128,6 +135,29 @@ function freshCached(url: string): CachedProbe | undefined {
   return { ...hit, choices: hit.choices.map((c) => ({ ...c, detail: c.detail.replace(" · not QuickTime-compatible", "") })) }
 }
 
+// ── Which sites the user has signed in to (the sessions themselves live in the backend) ──
+const SIGNINS_KEY = "yoink.signins"
+
+function loadSignins(): SignedIn[] {
+  try {
+    const parsed: unknown = JSON.parse(readStore(SIGNINS_KEY) ?? "[]")
+    return Array.isArray(parsed)
+      ? parsed.filter((s): s is SignedIn => !!s && typeof s.id === "string" && typeof s.label === "string")
+      : []
+  } catch {
+    return []
+  }
+}
+
+// yt-dlp's own wording is a command-line hint; say what's actually going on
+function loginMessage(site: SignInSite, hadLogin: boolean): string {
+  // Android can't sign in yet (the sign-in window only exists on the desktop app so far)
+  if (backend.isAndroid) return `${site.label} only shares this with signed-in users, and Yoink can’t sign in on Android yet.`
+  return hadLogin
+    ? `${site.label} didn’t accept your saved sign-in. It may have expired, so sign in again.`
+    : `${site.label} only shares this with signed-in users. Sign in once and Yoink will remember it.`
+}
+
 const shortUrl = (url: string) => url.replace(/^https?:\/\/(www\.)?/, "")
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -147,6 +177,12 @@ export default function App() {
   const [fromCache, setFromCache] = useState(false)
   const [existing, setExisting] = useState<DownloadedFile[]>([])
   const [openError, setOpenError] = useState<string | null>(null)
+  const [signins, setSignins] = useState<SignedIn[]>(loadSignins)
+  const signinsRef = useRef(signins) // for callbacks that outlive a render
+  signinsRef.current = signins
+  const [signInFor, setSignInFor] = useState<{ site: SignInSite; then?: () => void } | null>(null)
+  const [signinPick, setSigninPick] = useState(SITES[0].id)
+  const loginRef = useRef(false) // did the link being looked at need a sign-in?
   const [batchOpen, setBatchOpen] = useState(false)
   const [batchText, setBatchText] = useState("")
   const [batchQuality, setBatchQuality] = useState<BatchQuality>("best")
@@ -228,14 +264,28 @@ export default function App() {
   }, [phase.name, url, history])
 
   // ── Probe ──────────────────────────────────────────────────────
+  // Try without a login first: it's the normal case, and it keeps a session from being sent to a
+  // site that doesn't need it. Only when the site asks for one do we retry with the saved session.
+  const probeSmart = async (target: string) => {
+    try {
+      return { result: await backend.probe(target, false), login: false }
+    } catch (e) {
+      if (signinsRef.current.length > 0 && needsLogin(errorText(e))) {
+        return { result: await backend.probe(target, true), login: true }
+      }
+      throw e
+    }
+  }
+
   const startProbe = useCallback(async (target: string) => {
     const run = ++runRef.current
     setUrl(target)
     setPlatform(detectPlatform(target))
     setPhase({ name: "probing", status: "Fetching video info…" })
     try {
-      const result = await backend.probe(target)
+      const { result, login } = await probeSmart(target)
       if (run !== runRef.current) return
+      loginRef.current = login
       const videoInfo = JSON.parse(result.info) as VideoInfo
       infoPathRef.current = result.infoPath
       const built = buildChoices(videoInfo)
@@ -245,6 +295,7 @@ export default function App() {
         duration: videoInfo.duration,
         choices: built,
         infoPath: result.infoPath,
+        login,
         fetchedAt: Date.now(),
       })
       setFromCache(false)
@@ -254,7 +305,13 @@ export default function App() {
       setPhase({ name: "picking" })
     } catch (e) {
       if (run !== runRef.current) return
-      setPhase({ name: "error", message: errorText(e) })
+      const message = errorText(e)
+      if (needsLogin(message)) {
+        const site = siteForUrl(target)
+        setPhase({ name: "error", message: loginMessage(site, signinsRef.current.length > 0), signIn: backend.isAndroid ? undefined : site })
+      } else {
+        setPhase({ name: "error", message })
+      }
     }
   }, [])
 
@@ -274,6 +331,7 @@ export default function App() {
         setChoices(cached.choices)
         setSelected(0)
         infoPathRef.current = Date.now() - cached.fetchedAt < INFO_PATH_MAX_AGE ? cached.infoPath : undefined
+        loginRef.current = !!cached.login
         setFromCache(true)
         setPhase({ name: "picking" })
         return
@@ -327,7 +385,7 @@ export default function App() {
       onProgress: (progress: Progress) => patchJob(job.id, { progress, processing: false }),
       onProcessing: () => patchJob(job.id, { processing: true }),
     }
-    const base = { url: job.url, choiceArgs: job.choiceArgs, outDir }
+    const base = { url: job.url, choiceArgs: job.choiceArgs, outDir, useCookies: !!job.login }
     patchJob(job.id, { status: "running", message: undefined, progress: undefined, processing: false, refreshing: false })
     try {
       let filepath: string
@@ -352,7 +410,18 @@ export default function App() {
       })
     } catch (e) {
       if (cancelledRef.current.has(job.id)) return
-      patchJob(job.id, { status: "error", message: errorText(e), progress: undefined, processing: false })
+      const message = errorText(e)
+      if (needsLogin(message)) {
+        // refused without a login: if we have one, try again with it
+        if (!job.login && signinsRef.current.length > 0) {
+          patchJob(job.id, { login: true })
+          return runJob({ ...job, login: true }, infoPath)
+        }
+        const site = siteForUrl(job.url)
+        patchJob(job.id, { status: "error", message: loginMessage(site, !!job.login), signIn: backend.isAndroid ? undefined : site, progress: undefined, processing: false })
+        return
+      }
+      patchJob(job.id, { status: "error", message, progress: undefined, processing: false })
     }
   }
 
@@ -369,6 +438,7 @@ export default function App() {
       kind: choice.kind,
       choiceArgs: choice.args,
       infoPath: infoPathRef.current ?? null,
+      login: loginRef.current,
       status: "running",
       processing: false,
       refreshing: false,
@@ -419,18 +489,22 @@ export default function App() {
       let title = job.title
       let choicesFound: DownloadChoice[]
       let infoPath: string | undefined
+      let login = false
       const cached = freshCached(job.url) // fetched it recently? no need to ask again
       if (cached) {
         title = cached.title
         choicesFound = cached.choices
         infoPath = Date.now() - cached.fetchedAt < INFO_PATH_MAX_AGE ? cached.infoPath : undefined
+        login = !!cached.login
       } else {
-        const result = await backend.probe(job.url)
+        const probed = await probeSmart(job.url)
+        const result = probed.result
+        login = probed.login
         const videoInfo = JSON.parse(result.info) as VideoInfo
         title = videoInfo.title
         choicesFound = buildChoices(videoInfo)
         infoPath = result.infoPath
-        saveCache(job.url, { title, uploader: videoInfo.uploader, duration: videoInfo.duration, choices: choicesFound, infoPath, fetchedAt: Date.now() })
+        saveCache(job.url, { title, uploader: videoInfo.uploader, duration: videoInfo.duration, choices: choicesFound, infoPath, login, fetchedAt: Date.now() })
       }
       if (cancelledRef.current.has(job.id)) return
       const choice = pickChoice(choicesFound, quality)
@@ -442,12 +516,19 @@ export default function App() {
         kind: choice.kind,
         choiceArgs: choice.args,
         infoPath: infoPath ?? null,
+        login,
       }
-      patchJob(job.id, { title: ready.title, label: ready.label, kind: ready.kind, choiceArgs: ready.choiceArgs, infoPath: ready.infoPath })
+      patchJob(job.id, { login, title: ready.title, label: ready.label, kind: ready.kind, choiceArgs: ready.choiceArgs, infoPath: ready.infoPath })
       await runJob(ready, ready.infoPath)
     } catch (e) {
       if (cancelledRef.current.has(job.id)) return
-      patchJob(job.id, { status: "error", message: errorText(e), progress: undefined, processing: false })
+      const message = errorText(e)
+      if (needsLogin(message)) {
+        const site = siteForUrl(job.url)
+        patchJob(job.id, { status: "error", message: loginMessage(site, signinsRef.current.length > 0), signIn: backend.isAndroid ? undefined : site, progress: undefined, processing: false })
+        return
+      }
+      patchJob(job.id, { status: "error", message, progress: undefined, processing: false })
     }
   }
 
@@ -471,6 +552,34 @@ export default function App() {
     setJobs((list) => [...queued, ...list])
     closeBatch()
     void runPool(queued, BATCH_CONCURRENCY, (job) => processBatchJob(job, batchQuality))
+  }
+
+  // ── Signing in ─────────────────────────────────────────────────
+  const openSignIn = (site: SignInSite, then?: () => void) => setSignInFor({ site, then })
+
+  const finishSignIn = () => {
+    if (!signInFor) return
+    const { site, then } = signInFor
+    const next = [...signinsRef.current.filter((s) => s.id !== site.id), { id: site.id, label: site.label }]
+    signinsRef.current = next // visible to the retry below, before the next render
+    setSignins(next)
+    writeStore(SIGNINS_KEY, JSON.stringify(next))
+    setSignInFor(null)
+    then?.()
+  }
+
+  const signOut = async (id: string) => {
+    const site = SITES.find((s) => s.id === id)
+    if (site) await backend.cookiesForget(site.domains).catch(() => undefined)
+    const next = signinsRef.current.filter((s) => s.id !== id)
+    signinsRef.current = next
+    setSignins(next)
+    writeStore(SIGNINS_KEY, JSON.stringify(next))
+  }
+
+  // after signing in, try every link that was waiting on that site again
+  const retryWaiting = (site: SignInSite) => {
+    for (const j of jobs) if (j.status === "error" && j.signIn?.id === site.id) retryJob(j)
   }
 
   // ── Navigation ─────────────────────────────────────────────────
@@ -688,7 +797,7 @@ export default function App() {
             </header>
             <ul className="list">
               {jobs.map((job) => (
-                <JobRow key={job.id} job={job} onCancel={cancelJob} onRetry={retryJob} onDismiss={dismissJob} onOpen={openSaved} />
+                <JobRow key={job.id} job={job} onCancel={cancelJob} onRetry={retryJob} onDismiss={dismissJob} onOpen={openSaved} onSignIn={(site) => openSignIn(site, () => retryWaiting(site))} />
               ))}
             </ul>
           </section>
@@ -775,11 +884,19 @@ export default function App() {
           {phase.name === "error" && (
             <>
               <button className="btn btn--ghost" onClick={() => reset(true)}>Back</button>
-              <button className="btn btn--primary" onClick={() => void startProbe(url)}>Try again</button>
+              {phase.signIn ? (
+                <button className="btn btn--primary" onClick={() => openSignIn(phase.signIn!, () => void startProbe(url))}>
+                  Sign in to {phase.signIn.label}
+                </button>
+              ) : (
+                <button className="btn btn--primary" onClick={() => void startProbe(url)}>Try again</button>
+              )}
             </>
           )}
         </div>
       </footer>
+
+      {signInFor && <SignInDialog site={signInFor.site} onSignedIn={finishSignIn} onClose={() => setSignInFor(null)} />}
 
       {aboutOpen && (
         <div className="modal-backdrop" onClick={() => setAboutOpen(false)}>
@@ -818,6 +935,31 @@ export default function App() {
                   </button>
                 )}
               </div>
+              {!backend.isAndroid && (
+              <div className="signins">
+                <p className="meta"><strong>Sign-ins</strong> · for sites that only share video with logged-in users</p>
+                {signins.map((s) => (
+                  <div className="signin-row" key={s.id}>
+                    <span className="signin-row__name"><CheckIcon /> {s.label}</span>
+                    <button className="btn btn--ghost btn--small" onClick={() => void signOut(s.id)}>Sign out</button>
+                  </div>
+                ))}
+                <div className="signin-add">
+                  <select className="select" value={signinPick} onChange={(e) => setSigninPick(e.target.value)} aria-label="Site">
+                    {SITES.filter((s) => !signins.some((x) => x.id === s.id)).map((s) => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn btn--secondary btn--small"
+                    disabled={signins.some((x) => x.id === signinPick)}
+                    onClick={() => { const site = SITES.find((s) => s.id === signinPick); if (site) { setAboutOpen(false); openSignIn(site) } }}
+                  >
+                    Sign in
+                  </button>
+                </div>
+              </div>
+              )}
               <p className="meta">Powered by yt-dlp and ffmpeg. Released under the MIT licence.</p>
               <p className="meta">Only download what you have the right to keep, and be excellent to creators.</p>
               <div className="links">
@@ -862,12 +1004,14 @@ function JobRow({
   onRetry,
   onDismiss,
   onOpen,
+  onSignIn,
 }: {
   job: Job
   onCancel: (id: string) => void
   onRetry: (job: Job) => void
   onDismiss: (id: string) => void
   onOpen: (path: string, how?: "open" | "show") => void
+  onSignIn: (site: SignInSite) => void
 }) {
   const percent = job.processing
     ? 1
@@ -896,7 +1040,10 @@ function JobRow({
               {backend.isAndroid ? "Open" : "Show"}
             </button>
           )}
-          {job.status === "error" && <button className="btn btn--secondary btn--small" onClick={() => onRetry(job)}>Retry</button>}
+          {job.status === "error" && job.signIn && (
+            <button className="btn btn--primary btn--small" onClick={() => onSignIn(job.signIn!)}>Sign in</button>
+          )}
+          {job.status === "error" && !job.signIn && <button className="btn btn--secondary btn--small" onClick={() => onRetry(job)}>Retry</button>}
           {!isActive(job) && (
             <button className="btn btn--ghost btn--small" onClick={() => onDismiss(job.id)} aria-label="Dismiss">✕</button>
           )}
