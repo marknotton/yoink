@@ -104,3 +104,42 @@ gh release upload app-vX.Y.Z release-staging/latest.json --clobber --repo markno
    and the new `latest.json` should still list `android-arm64` at version A.
 3. `yarn release patch --targets=android` for version C. The phone should offer the download and install it over the
    top without uninstalling.
+
+
+## Publishing the shared packages
+
+`yarn release:packages` publishes `@marknotton/yoink-core` and `@marknotton/yoink-runner-node` (see
+`packages/core/README.md`). It's separate from app releases and has its own tag, `packages-vX.Y.Z`.
+
+```sh
+yarn release:packages --dry-run        # shows every step; builds, uploads and publishes nothing
+yarn release:packages                  # GitHub Release with installable tarballs
+yarn release:packages --npm            # ...and npm as well
+```
+
+**The release is never marked "Latest".** The app's updater reads `/releases/latest/download/latest.json`; if a
+package release became "Latest", that address would stop returning the manifest and no installed app would find an
+update again. The script checks this after publishing.
+
+### Which npm account? (work vs personal)
+
+npm keeps one login per config file, so two accounts on one machine collide. To make a mix-up impossible:
+
+- The release **never reads `~/.npmrc`** (that may hold a work token). It uses its own file, `~/.npmrc-yoink`, the
+  public registry only, and no machine-wide npm config.
+- `"npmUser"` in `app/package.json` names the account that must publish. If the credentials are logged in as anyone
+  else, the script refuses **before** building or publishing anything.
+- If the package scope (`@marknotton`) isn't that user's own name, the user must belong to an npm organisation of
+  that name, or the script refuses.
+
+One-time setup, logged in as your **personal** account:
+
+```sh
+npm login --registry https://registry.npmjs.org/ --userconfig ~/.npmrc-yoink
+```
+
+Then set `"npmUser": "<your personal npm username>"` in `app/package.json`. To switch accounts, run the same login
+command again. Don't use `npm logout` without `--userconfig ~/.npmrc-yoink`, or you'll log out the other account.
+
+Publishing is permanent (npm allows unpublishing only within 72 hours), so each package version can be published once;
+bump the version in `packages/*/package.json` for the next release.

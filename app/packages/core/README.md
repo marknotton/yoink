@@ -48,6 +48,10 @@ breaking changes only in a major version.
 > **Maintainers:** `yarn release:packages` builds, tests, packs, proves the tarballs install into an empty
 > project, and publishes the release **as non-latest**. That flag matters: the Yoink *app's* updater reads
 > `/releases/latest/download/latest.json`, so a package release must never become the repo's "Latest".
+>
+> Add `--npm` to publish to npm as well. That is permanent, so it's opt-in, and it only ever uses the credentials in
+> `~/.npmrc-yoink`, which must be logged in as the account named by `"npmUser"` in `app/package.json` (your
+> *personal* account). A work login in `~/.npmrc` is never used. See [`app/docs/RELEASING.md`](../../docs/RELEASING.md).
 
 ## Thirty seconds
 

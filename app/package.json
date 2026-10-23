@@ -45,5 +45,6 @@
   "githubRepo": "marknotton/yoink",
   "workspaces": [
     "packages/*"
-  ]
+  ],
+  "npmUser": ""
 }
